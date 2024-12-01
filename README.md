@@ -21,3 +21,27 @@ import pylcloud
 from pylcloud.s3 import S3Client
 from pylcloud.elasticsearch import ElasticsearchClient
 ```
+
+## Content
+
+The content of pylcloud. Unless specified diferently, all the modules may be directly imported into Python code as libraries.
+
+### S3
+
+A high-level API that simplifies AWS S3 API calls.
+
+### Bedrock
+
+A high-level API that simplifies AWS Bedrock API calls.
+
+### Elasticsearch
+
+A high-level API that simplifies Elasticsearch API calls. Offers deployment tools and help too.
+
+### MySQL
+
+A high-level API that simplifies MySQL API calls. Offers deployment tools and help too.
+
+## Note
+
+See also ***PyYel-DevOps*** and ***PyYel-MLOps*** for development and AI tools.
