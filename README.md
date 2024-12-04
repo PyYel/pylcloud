@@ -44,4 +44,4 @@ A high-level API that simplifies MySQL API calls. Offers deployment tools and he
 
 ## Note
 
-See also ***PyYel-DevOps*** and ***PyYel-MLOps*** for development and AI tools.
+See also [***PyYel-DevOps***](https://github.com/PyYel/PyYel-DevOps) and [***PyYel-MLOps***](https://github.com/PyYel/PyYel-MLOps) for development and AI tools.
