@@ -8,7 +8,6 @@ if __name__ == "__main__":
     sys.path.append(os.path.dirname(AWS_DIR_PATH))
 
 from aws import AWS
-from aws import AWSBedrockModels
 
 class AWSBedrockKnowledgeBase(AWS):
     """
@@ -47,7 +46,7 @@ class AWSBedrockKnowledgeBase(AWS):
         super().__init__()
 
         # The agent is used to retreive KB content by using an encoding model 
-        self.bedrock_agent_client = self._create_client(service_name='bedrock-agent-runtime', 
+        self.bedrock_agent_client = self._create_client(aws_service_name='bedrock-agent-runtime', 
                                                         aws_access_key_id=aws_access_key_id, 
                                                         aws_secret_access_key=aws_secret_access_key, 
                                                         aws_session_token=aws_session_token,
@@ -135,12 +134,3 @@ class AWSBedrockKnowledgeBase(AWS):
         if display: print(models_list)
 
         return models_list
-
-
-
-if __name__ == "__main__":
-
-    bedrock_kb_api = AWSBedrockKnowledgeBase()  
-    response = bedrock_kb_api.retrieveAndGenerate(document_text="a recipee about pumpkins")  
-    print(response)
-

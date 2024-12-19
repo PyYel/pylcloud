@@ -17,7 +17,7 @@ class AWSBedrockModels(AWS):
     def __init__(self, 
                  aws_access_key_id: str,
                  aws_secret_access_key: str, 
-                 aws_region_name: str,
+                 aws_region_name: str = 'us-west-1',
                  aws_session_token: str = uuid.uuid4()
                  ) -> None:
         """
@@ -118,12 +118,4 @@ class AWSBedrockModels(AWS):
         if display: print(models_list)
 
         return models_list
-    
-
-if __name__ == "__main__":
-    model_id = 'amazon.titan-text-lite-v1' 
-    prompt_text = 'Give me a recipee of fish and chips?'
-    
-    bedrock_models_api = AWSBedrockModels()
-    response = bedrock_models_api.evaluate_model(model_id, prompt_text, display=True)
     
