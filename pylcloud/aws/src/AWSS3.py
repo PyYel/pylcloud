@@ -1,115 +1,76 @@
-import boto3
-import os
+import os, sys
+import boto3.s3
+import boto3.s3.inject
 import sys
-import boto3.session
+
 from tqdm import tqdm
-import shutil
-import sys
-from functools import wraps
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Callable
 
-
-AWS_DIR_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+AWS_DIR_PATH = os.path.dirname(os.path.dirname(__file__))
 if __name__ == "__main__":
     sys.path.append(os.path.dirname(AWS_DIR_PATH))
-    
-from main import AWS_KEY_ID, AWS_KEY_ACCESS
+
+from aws import AWS
 
 
-class S3Client():
+class AWSS3(AWS):
     """
     Standard S3 class with all purpose methods.
     """
-
     def __init__(self, 
-                 aws_access_key_id:str,
-                 aws_secret_access_key:str, 
-                 bucket_name:str = "capeng-dataverse",
-                 authorized_access:str="") -> None:
+                 aws_access_key_id: str,
+                 aws_secret_access_key: str, 
+                 aws_region_name: str,
+                 bucket_name: str,
+                 temp_folder_path: str = None) -> None:
         """
         Initiates a connection to a given S3 bucket.
 
         Parameters
         ----------
-        - aws_access_key_id: the user's access key id (private)
-        - aws_secret_access_key: the user's access key (private)
-        - bucket_name: the name of the bucket to manipulate
+        aws_access_key_id: str
+            The user's private key ID to use to connect to the AWS services.
+        aws_secret_access_key: str
+            The user's private key to use to connect to the AWS services.
+        aws_region_name: str, 'us-east-1'
+            The AWS ressources region name.
+        bucket_name: str
+            The name of the bucket to fetch and send data to.
+        temp_folder_path: str, '~/temp'
+            The ``/temp`` folder is used as a default folder to read and write data locally. It
+            can be considered as a default input/output folder. If None, ``/temp`` folder will
+            be created in the current working directory.
 
         Note
         ----
-        - `key` kwarg refers to a cloud path
-        - `path` kwarg refers to a local path
-        """
+        - An instance of this class can connect to only one bucket.
+        Create other instances to connect to multiple buckets at once.
+        - The ``/temp`` folder should be a folder that can be completely erased.
+        - The `key` kwarg usually refers to a cloud path.
+        - The `path` kwarg usually refers to a local path.
 
-        self.client = boto3.client(service_name='s3', 
-                                   aws_access_key_id=aws_access_key_id, 
-                                   aws_secret_access_key=aws_secret_access_key, 
-                                   region_name='eu-west-1')
+        Exemple
+        -------
+        >>> bucket_api = AWSS3(KEY_ID, KEY, 'eu-west-1', 'my_bucket_name', 'C:/Users/Me/myapp/output_folder')
+        """
+        super().__init__()
+
         self.bucket_name = bucket_name
-        self.__authorized_access = authorized_access
+        self.temp_folder_path = temp_folder_path
+
+        self.s3_client: boto3.s3.inject = self._create_client(aws_service_name="s3",
+                                                              aws_access_key_id=aws_access_key_id,
+                                                              aws_secret_access_key=aws_secret_access_key,
+                                                              aws_region_name=aws_region_name)
 
         # S3Client neeeds a working folder to download/upload files from a unique entry point
-        self.temp_folder_path = os.path.join(os.path.dirname(AWS_DIR_PATH), 'temp')
-        if not os.path.exists(self.temp_folder_path):
-            os.mkdir(self.temp_folder_path)
-            print("S3Client >> Temporary folder created:", self.temp_folder_path)
+        if self.temp_folder_path is None:
+            self.temp_folder_path = os.path.join(os.getcwd(), 'temp')
+            if not os.path.exists(self.temp_folder_path):
+                os.mkdir(self.temp_folder_path)
+                print("S3Client >> Temporary folder created:", self.temp_folder_path)
 
 
-    @staticmethod
-    def _verify_access(func:Callable):
-        """
-        Checks if the client is accessing authorized ressources, raises ``PermissionError`` otherwise.
-        """
-        
-        @wraps(func)
-        def wrapper(self, *args, **kwargs):
-                
-            def check_keys(keys):
-                if isinstance(keys, str):
-                    keys = [keys]
-                if not all(key.startswith(self.__authorized_access) for key in keys):
-                    raise PermissionError(f"S3Client >> Attempting to access content outside of DataHive: ({keys})")
-            
-            if 'key' in kwargs:
-                check_keys(kwargs['key'])
-            elif 'keys' in kwargs:
-                check_keys(kwargs['keys'])
-            else:
-                raise SyntaxError(f"S3Client >> Failed to verify content access request. Ensure key/keys were passed as kwargs")
-
-            return func(self, *args, **kwargs)
-        
-        return wrapper
-
-
-    def _empty_folder(self, path:str=None):
-        """
-        Empties a folder. By default, clears the temp folder.
-
-        Parameters
-        ----------
-        - path: the path to the folder to empty from all its content
-        """
-        
-        if not path:
-            path = self.temp_folder_path
-
-        if os.path.exists(path):
-            for filename in os.listdir(path):
-                file_path = os.path.join(path, filename)
-                try:
-                    # Check if it is a file and delete it
-                    if os.path.isfile(file_path) or os.path.islink(file_path):
-                        os.unlink(file_path)
-                    # Check if it is a directory and delete it and its contents
-                    elif os.path.isdir(file_path):
-                        shutil.rmtree(file_path)
-                except Exception as e:
-                    print(f"S3Client >> Failed to empty {path}: {e}")
-
-
-    @_verify_access
     def ensure_key(self, key: str):
         """
         Checks if the cloud keys exist and returns a tuple of the results
@@ -123,14 +84,13 @@ class S3Client():
         - bool: whereas the key exists (True) or not (False) 
         """
 
-        response = self.client.list_objects_v2(Bucket=self.bucket_name, Prefix=key)
+        response = self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=key)
         if 'Contents' in response:
             return key, True
         else: 
             return key, False
     
 
-    @_verify_access
     def ensure_keys(self, keys: list[str]):
         """
         Checks if the cloud keys exist and returns a dictionnary of the results, 
@@ -165,8 +125,6 @@ class S3Client():
         return results
 
 
-
-    @_verify_access
     def download_file(self, key: str, file_idx: int = 0, path: str = None):
         """
         Downloads a file into the path folder where file is renamed fileidx_filename.fileextension
@@ -182,11 +140,11 @@ class S3Client():
             path = self.temp_folder_path
             self._empty_folder()
 
-        self.client.download_file(Bucket=self.bucket_name, 
+        self.s3_client.download_file(Bucket=self.bucket_name, 
                                   Key=key, 
                                   Filename=path)
 
-    @_verify_access
+
     def download_files(self, keys:list[str], paths: list[str] = None):
         """
         Downloads a list of files into the path folder where each file is renamed fileidx_filename.fileextension
@@ -217,7 +175,7 @@ class S3Client():
             with ThreadPoolExecutor(max_workers=2*os.cpu_count()) as executor:
                 futures = []
                 for key, path in zip(keys, paths):
-                    futures.append(executor.submit(self.client.download_file, 
+                    futures.append(executor.submit(self.s3_client.download_file, 
                                                     Bucket=self.bucket_name, 
                                                     Key=key,
                                                     Filename=path))
@@ -233,7 +191,7 @@ class S3Client():
         return failed_files
 
 
-    @_verify_access
+
     def download_directory(self, key:str, path:str=None):
         """
         Downloads all the files from a folder into a single output folder where
@@ -264,7 +222,7 @@ class S3Client():
         else:
             if not os.path.exists(path): os.mkdir(path)
         
-        paginator = self.client.get_paginator('list_objects_v2')
+        paginator = self.s3_client.get_paginator('list_objects_v2')
         page_total = 0
         for result in paginator.paginate(Bucket=self.bucket_name, Prefix=key):
             page_total += 1
@@ -282,7 +240,7 @@ class S3Client():
                             dirpath = os.path.join(os.path.join(path), f"{os.path.basename(os.path.dirname(key))}")
                             if not os.path.exists(dirpath): os.mkdir(dirpath)
                             filename = os.path.basename(key)
-                            futures.append(executor.submit(self.client.download_file, 
+                            futures.append(executor.submit(self.s3_client.download_file, 
                                                            Bucket=self.bucket_name, 
                                                            Key=key,
                                                            Filename=os.path.join(dirpath, filename)))
@@ -298,7 +256,7 @@ class S3Client():
 
         return failed_files
 
-    @_verify_access
+
     def list_keys(self, key:str=""):
         """
         Returns a list of all the files present in a bucket and returns the keys.
@@ -307,7 +265,7 @@ class S3Client():
         if not self.ensure_key(key=key):
             raise ValueError(f"S3Client >> File listing prefix '{key}' does not exist")
 
-        paginator = self.client.get_paginator('list_objects_v2')
+        paginator = self.s3_client.get_paginator('list_objects_v2')
         file_list = []
         print(f"S3Client >> Listing files in {self.bucket_name}/{key}")
         for result in paginator.paginate(Bucket=self.bucket_name, Prefix=key):
@@ -318,7 +276,7 @@ class S3Client():
         return file_list
         
 
-    @_verify_access
+
     def make_directory(self, key:str):
         """
         Creates a directory on the cloud.
@@ -329,10 +287,10 @@ class S3Client():
         """
 
         if not self.ensure_key(key=key):
-            self.client.put_object(Bucket=self.bucket_name, Key=key)
+            self.s3_client.put_object(Bucket=self.bucket_name, Key=key)
 
 
-    @_verify_access
+
     def make_directories(self, keys:list[str]):
         """
         Creates directories on the cloud
@@ -349,7 +307,7 @@ class S3Client():
             with ThreadPoolExecutor(max_workers=2*os.cpu_count()) as executor:
                 futures = []
                 for key in keys:
-                    futures.append(executor.submit(self.client.put_object, 
+                    futures.append(executor.submit(self.s3_client.put_object, 
                                                     Bucket=self.bucket_name, 
                                                     Key=key))
 
@@ -364,7 +322,7 @@ class S3Client():
         return failed_files
 
 
-    @_verify_access             
+             
     def delete_key(self, key:str):
         """
         Deletes a file on the cloud from its key
@@ -375,10 +333,10 @@ class S3Client():
         """
 
         if self.ensure_key(key=key):
-            self.client.delete_object(Bucket=self.bucket_name, Key=key)
+            self.s3_client.delete_object(Bucket=self.bucket_name, Key=key)
 
 
-    @_verify_access
+
     def delete_keys(self, keys:list[str]):
         """
         Deletes from the bucket the files specified in keys, 
@@ -397,7 +355,7 @@ class S3Client():
             deleted_counter = 0
             print(f"S3Client >> Deleting {len(keys)} keys")
             for batch in tqdm(batched_keys):
-                response = self.client.delete_objects(Bucket=self.bucket_name, 
+                response = self.s3_client.delete_objects(Bucket=self.bucket_name, 
                                                     Delete={'Objects': [{'Key': key} for key in batch]})
                 deleted_counter += len(response.get('Deleted', []))
 
@@ -414,7 +372,7 @@ class S3Client():
 
         
 
-    @_verify_access
+
     def cut_key(self, key_original:str, key_cut:str):
         """
         Cut from the key_original file to key_cut
@@ -432,12 +390,12 @@ class S3Client():
             print(f'file: {key_cut} is already exist')
             
         else:
-            self.client.copy(CopySource=dict_key_original, Bucket=self.bucket_name, Key=key_cut)
-            self.client.delete_object(Bucket=self.bucket_name, Key=key_original)
+            self.s3_client.copy(CopySource=dict_key_original, Bucket=self.bucket_name, Key=key_cut)
+            self.s3_client.delete_object(Bucket=self.bucket_name, Key=key_original)
             print(f'file: {key_cut} was successfully cut from {key_original}')
 
 
-    @_verify_access   
+   
     def cut_list_keys(self, keys_original:list[str], keys_cut:list[str]):
         """
         Cut from list of the keys_original file to the list of keys_cut
@@ -451,7 +409,7 @@ class S3Client():
                 self.cut_key(key_original, key_cut)
 
 
-    @_verify_access
+
     def copy_key(self, key_original:str, key_copy:str):
         """
         Copy from the key_original file to key_copy
@@ -469,11 +427,11 @@ class S3Client():
             print(f'file: {key_copy} is already exist')
             
         else:
-            self.client.copy(CopySource=dict_key_original, Bucket=self.bucket_name, Key=key_copy)
+            self.s3_client.copy(CopySource=dict_key_original, Bucket=self.bucket_name, Key=key_copy)
             print(f'file: {key_copy} was successfully copy from {key_original}')
 
 
-    @_verify_access 
+ 
     def copy_list_keys(self, keys_original:list[str], keys_copy:list[str]):
         """
         Copy from list of the key_original file to the list of key_copy
@@ -487,7 +445,7 @@ class S3Client():
                 self.cut_key(key_original, key_copy)
 
 
-    @_verify_access   
+   
     def rename_key(self, key_original:str, new_name:str):
         """
         Renames from the key_original file to new_name
@@ -506,11 +464,11 @@ class S3Client():
             print(f'file: {new_key} is already exist')
             
         else:
-            self.client.copy(CopySource=dict_key_original, Bucket=self.bucket_name, Key=new_key)
-            self.client.delete_object(Bucket=self.bucket_name, Key=key_original)
+            self.s3_client.copy(CopySource=dict_key_original, Bucket=self.bucket_name, Key=new_key)
+            self.s3_client.delete_object(Bucket=self.bucket_name, Key=key_original)
             print(f'file: {key_original} was successfully renamed to {new_key}')
 
-    @_verify_access     
+     
     def rename_list_keys(self, keys_original:list[str], new_names:list[str]):
         """
         Renames from the list of the key_original file to the list of the new_name
@@ -524,7 +482,7 @@ class S3Client():
                 self.cut_key(key_original, new_name)
 
 
-    @_verify_access
+
     def upload_file(self, key:str, path:str):
         """
         Uploads a local file (path) into its cloud location (key)
@@ -533,13 +491,13 @@ class S3Client():
         if not os.path.exists(path):
             raise ValueError("S3Client >> Local file path does not exist. Check the path argument")
 
-        self.client.upload_file(Bucket=self.bucket_name, 
+        self.s3_client.upload_file(Bucket=self.bucket_name, 
                                 Key=key,
                                 Filename=path)
         
         return None
 
-    @_verify_access
+
     def upload_files(self, keys:list[str], paths:list[str]):
         """
         Uploads a list of local files (paths) into their cloud locations (keys)
@@ -554,7 +512,7 @@ class S3Client():
             with ThreadPoolExecutor(max_workers=2*os.cpu_count()) as executor:
                 futures = []
                 for key, file in list(zip(keys, paths)):
-                    futures.append(executor.submit(self.client.upload_file, 
+                    futures.append(executor.submit(self.s3_client.upload_file, 
                                                     Bucket=self.bucket_name, 
                                                     Key=key,
                                                     Filename=file))
@@ -569,7 +527,7 @@ class S3Client():
 
         return None
 
-    @_verify_access     
+     
     def upload_directory(self, key:str, path:str):
         """
         Uploads local directory to key from bucket
@@ -589,7 +547,7 @@ class S3Client():
                 with ThreadPoolExecutor(max_workers=2*os.cpu_count()) as executor:
                     futures = []
                     for file in file_list:
-                        futures.append(executor.submit(self.client.upload_file, 
+                        futures.append(executor.submit(self.s3_client.upload_file, 
                                                         Bucket=self.bucket_name, 
                                                         Key=key+os.path.split(file)[1],
                                                         Filename=os.path.join(path, file)))
