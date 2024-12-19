@@ -18,10 +18,10 @@ class AWSS3(AWS):
     Standard S3 class with all purpose methods.
     """
     def __init__(self, 
+                 bucket_name: str,
                  aws_access_key_id: str,
                  aws_secret_access_key: str, 
-                 aws_region_name: str,
-                 bucket_name: str,
+                 aws_region_name: str = 'us-west-1',
                  temp_folder_path: str = None) -> None:
         """
         Initiates a connection to a given S3 bucket.
@@ -63,12 +63,12 @@ class AWSS3(AWS):
                                                               aws_secret_access_key=aws_secret_access_key,
                                                               aws_region_name=aws_region_name)
 
-        # S3Client neeeds a working folder to download/upload files from a unique entry point
+        # AWSS3 neeeds a working folder to download/upload files from a unique entry point
         if self.temp_folder_path is None:
             self.temp_folder_path = os.path.join(os.getcwd(), 'temp')
             if not os.path.exists(self.temp_folder_path):
                 os.mkdir(self.temp_folder_path)
-                print("S3Client >> Temporary folder created:", self.temp_folder_path)
+                print("AWSS3 >> Temporary folder created:", self.temp_folder_path)
 
 
     def ensure_key(self, key: str):
@@ -77,11 +77,13 @@ class AWSS3(AWS):
 
         Parameters
         ----------
-        - keys: the keys to check on the cloud 
+        key: str
+            The key to check on the cloud 
 
-        Returns:
-        - key: the tested key
-        - bool: whereas the key exists (True) or not (False) 
+        Returns
+        -------
+        tuple: (str, bool)
+            The tested key and whereas it exists (True) or not (False) 
         """
 
         response = self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=key)
@@ -98,13 +100,16 @@ class AWSS3(AWS):
 
         Parameters
         ----------
-        - keys: the keys to check on the cloud 
+        keys: list[str]
+            The keys to check on the cloud.
 
-        Returns:
-        - dict{key: bool}
+        Returns
+        -------
+        results: dict[str, bool]
+            A dictionnary (dict{key: bool}) of the boolean response for each key.
         """
 
-        print(f"S3Client >> Verifying the existence of {len(keys)} keys on the cloud")
+        print(f"AWSS3 >> Verifying the existence of {len(keys)} keys on the cloud.")
         results = {}
         failures = 0
         with tqdm(total=len(keys)) as pbar:
@@ -120,45 +125,47 @@ class AWSS3(AWS):
                         failures += 1
                     pbar.update(1)
         if failures:
-            print(f"S3Client >> Failed to verify the existence of {failures}/{len(keys)} keys")
+            print(f"AWSS3 >> Failed to verify the existence of {failures}/{len(keys)} keys.")
 
         return results
 
 
-    def download_file(self, key: str, file_idx: int = 0, path: str = None):
+    def download_file(self, key: str, path: str):
         """
-        Downloads a file into the path folder where file is renamed fileidx_filename.fileextension
+        Downloads a file ``key`` to the local ``path``.
 
-        Args:
-        - key: the cloud path of the file
-        - path: the local path to save the dowload the data to. If None is specified, the data is
-        saved into the default temp folder
-        - file_idx: the index to prefix the downloaded file with
+        Parameters
+        ----------
+        key: str
+            The cloud path of the file.
+        path: str
+            The local path to save the download the data to.
         """
-
-        if not path:
-            path = self.temp_folder_path
-            self._empty_folder()
 
         self.s3_client.download_file(Bucket=self.bucket_name, 
-                                  Key=key, 
-                                  Filename=path)
+                                     Key=key, 
+                                     Filename=path)
+        
+        return None
 
 
-    def download_files(self, keys:list[str], paths: list[str] = None):
+    def download_files(self, keys: list[str], paths: list[str] = None):
         """
-        Downloads a list of files into the path folder where each file is renamed fileidx_filename.fileextension
+        Downloads a list of files into the path folder.
 
-        Args:
-        - keys: the list of cloud paths of each file
-        - path: the local path to save the dowload the data to. If None is specified, the data is
-        saved into the default temp folder
-        - file_idx: the index to prefix the downloaded file with
+        Parameters
+        ----------
+        keys: list[str] 
+            The list of cloud paths of each file
+        path: list[str]
+            The local path to save the dowload the data to. If None is specified, the data is
+            saved into the default temp folder
         """
+
         if isinstance(keys, str):
             keys = [keys]
         if not isinstance(keys, list):
-            print(f"S3Client >> Argument keys is of type {type(keys)} instead of list[str]. Dowload aborted")
+            print(f"AWSS3 >> Argument keys is of type {type(keys)} instead of list[str]. Dowload aborted.")
             return False
 
         if not paths:
@@ -166,11 +173,11 @@ class AWSS3(AWS):
             paths = [os.path.join(path, f"{idx}{os.path.splitext(key)[-1]}") for idx, key in enumerate(keys)]
         else:
             if not all([os.path.exists(os.path.dirname(path)) for path in paths]):
-                print("S3DataHive >> Download path do not exist. Download aborted")
+                print("AWSS3 >> Download path do not exist. Download aborted.")
                 return False
 
         failed_files = []
-        print(f"S3Client >> Downloading {len(keys)} files")
+        print(f"AWSS3 >> Downloading {len(keys)} files.")
         with tqdm(total=len(keys)) as pbar:
             with ThreadPoolExecutor(max_workers=2*os.cpu_count()) as executor:
                 futures = []
@@ -186,35 +193,35 @@ class AWSS3(AWS):
                         failed_files.append(future)
                     pbar.update(1)
         if failed_files:
-            print(f"S3Client >> Error downloading {len(failed_files)}/{len(keys)} files")
+            print("AWSS3 >> An error was raised (only one is shown if many): \n", e)
+            print(f"AWSS3 >> Error downloading {len(failed_files)}/{len(keys)} files. See error above.")
 
         return failed_files
 
 
-
-    def download_directory(self, key:str, path:str=None):
+    def download_directory(self, key: str, path: str = None):
         """
         Downloads all the files from a folder into a single output folder where
         each file is renamed fileidx_filename.fileextension.
 
         Parameters
         ----------
-        - key: the cloud path of the folder on the S3 storage
-        - path: the local path to save the dowload the data to. If None is specified, the data is
-        saved into the default temp folder
+        key: str
+            The cloud path of the folder on the S3 storage.
+        path: str
+            The local path to save the dowload the data to.
 
         Returns
         -------
-        - failed_files: the list of files that were not correctly downloaded
+        failed_files: list[str]
+            The list of files that were not correctly downloaded.
 
         Example
         -------
-        >>> folder = DataHive/Data
-        >>> os.listdir(folder)
-        ["img1.jpg", "cat.png", "sample.wav"]
+        >>> folder = my_folder/my_data_subfolder
         >>> download_directory(key=folder)
         >>> os.listdir(path)
-        ["0_img1.jpg", "1_cat.png", "2_sample.wav"]
+        ["img1.jpg", "cat.png", "sample.wav"]
         """
 
         if not path:
@@ -229,7 +236,7 @@ class AWSS3(AWS):
 
         file_idx = 0
         failed_files = []
-        print(f"S3Client >> Downloading batch of content from '{key}'")#: {page}/{page_total}")
+        print(f"AWSS3 >> Downloading batch of content from '{key}'")#: {page}/{page_total}")
         with tqdm(total=page_total) as pbar:
             for result in paginator.paginate(Bucket=self.bucket_name, Prefix=key):
                 if result.get('Contents') is not None:
@@ -246,105 +253,74 @@ class AWSS3(AWS):
                                                            Filename=os.path.join(dirpath, filename)))
                             file_idx += 1
 
-                        for future in as_completed(futures):
-                            try:
-                                future.result()
-                            except Exception as e:
-                                print(f"S3Client >> Error downloading file: {e}")
-                                failed_files.append(future)
-                pbar.update(1)
+                for future in as_completed(futures):
+                    try:
+                        future.result()
+                    except Exception as e:
+                        failed_files.append(future)
+                    pbar.update(1)
+
+        if failed_files:
+            print("AWSS3 >> An error was raised (only one is shown if many): \n", e)
+            print(f"AWSS3 >> Error downloading {len(failed_files)} files. See error above.")
 
         return failed_files
 
 
-    def list_keys(self, key:str=""):
+    def list_keys(self, prefix: str = ""):
         """
-        Returns a list of all the files present in a bucket and returns the keys.
+        Returns a list of all the files present in a bucket whose key starts with ``key``.
+
+        Parameters
+        ----------
+        prefix: str
+            The key path to match. Hence if ``''``, then the whole bucket content will be listed.
+
+        Returns
+        -------
+        file_list: list[str]
+            The list of keys that match the ``prefix``.
         """
 
-        if not self.ensure_key(key=key):
-            raise ValueError(f"S3Client >> File listing prefix '{key}' does not exist")
+        if not self.ensure_key(key=prefix):
+            raise ValueError(f"AWSS3 >> File listing prefix '{prefix}' does not exist")
 
         paginator = self.s3_client.get_paginator('list_objects_v2')
         file_list = []
-        print(f"S3Client >> Listing files in {self.bucket_name}/{key}")
-        for result in paginator.paginate(Bucket=self.bucket_name, Prefix=key):
+        print(f"AWSS3 >> Listing files in {self.bucket_name}/{prefix}")
+        for result in paginator.paginate(Bucket=self.bucket_name, Prefix=prefix):
             if result.get('Contents') is not None:
                 for obj in result['Contents']:
                     file_list.append(obj['Key'])
 
         return file_list
-        
-
-
-    def make_directory(self, key:str):
-        """
-        Creates a directory on the cloud.
-
-        Parameters
-        ----------
-        - key: the folder path to create on the cloud 
-        """
-
-        if not self.ensure_key(key=key):
-            self.s3_client.put_object(Bucket=self.bucket_name, Key=key)
-
-
-
-    def make_directories(self, keys:list[str]):
-        """
-        Creates directories on the cloud
-
-        Parameters
-        ----------
-        - keys: the list of folders paths to create on the cloud 
-        """
-
-
-        failed_files = []
-        print(f"S3Client >> Creating {len(keys)} folders on the cloud")
-        with tqdm(total=len(keys)) as pbar:
-            with ThreadPoolExecutor(max_workers=2*os.cpu_count()) as executor:
-                futures = []
-                for key in keys:
-                    futures.append(executor.submit(self.s3_client.put_object, 
-                                                    Bucket=self.bucket_name, 
-                                                    Key=key))
-
-                for future in as_completed(futures):
-                    try:
-                        future.result()
-                    except Exception as e:
-                        print(f"S3Client >> Error making folder: {e}")
-                        failed_files.append(future)
-                    pbar.update(1)
-
-        return failed_files
-
 
              
-    def delete_key(self, key:str):
+    def delete_key(self, key: str):
         """
         Deletes a file on the cloud from its key
 
         Parameters
         ----------
-        - key: the path of the file to delete on the cloud
+        key: str
+            The path of the file to delete on the cloud
         """
 
         if self.ensure_key(key=key):
             self.s3_client.delete_object(Bucket=self.bucket_name, Key=key)
 
+        return None
 
 
-    def delete_keys(self, keys:list[str]):
+    def delete_keys(self, keys: list[str]):
         """
         Deletes from the bucket the files specified in keys, 
         and returns the list of the successfully deleted files
 
         Parameters
         ----------
-        - keys: the list of keys (cloud path) to delete
+        keys: list[str] 
+            The list of keys (cloud path) to delete.
         """
 
         if keys:
@@ -353,161 +329,97 @@ class AWSS3(AWS):
                 batched_keys.append(keys[batch_start:batch_start+1000])
 
             deleted_counter = 0
-            print(f"S3Client >> Deleting {len(keys)} keys")
+            print(f"AWSS3 >> Deleting {len(keys)} keys.")
             for batch in tqdm(batched_keys):
                 response = self.s3_client.delete_objects(Bucket=self.bucket_name, 
                                                     Delete={'Objects': [{'Key': key} for key in batch]})
                 deleted_counter += len(response.get('Deleted', []))
 
             if deleted_counter == len(keys):
-                print(f"S3Client >> All {deleted_counter} keys successfully deleted")
+                print(f"AWSS3 >> All {deleted_counter} keys were successfully deleted.")
             else:
-                print(f"S3Client >> Only {deleted_counter} out of {len(keys)} keys successfully deleted ")
+                print(f"AWSS3 >> Only {deleted_counter} out of {len(keys)} keys were successfully deleted.")
 
             return None
         
         else:
-            print(f"S3Client >> No keys were deleted as the input was empty")
-            return None
+            print(f"AWSS3 >> No keys were deleted as the input was empty.")
 
+        return None        
+
+
+    def edit_key(self, original_key: str, new_key: str, replace: bool = True):
+        """
+        Moves, renames, or copy-pastes a key, by editing its cloud path.
+
+        Parameters
+        ----------
+        original_key : str
+            The key to edit.
+        new_key: str
+            The new key name or path.
+        replace: str, True
+            If ``False`` the ``original_key`` is kept, hence resulting in a copy-paste action.
+            Otherwise, is similar to either a cut-paste or rename acion. 
+
+        Note
+        ----
+        - Either way, the key is copied to a ``new_key`` cloud path. If ``replace`` is set to ``True``, the old
+        version of the key is deleted after.
+        """
         
-
-
-    def cut_key(self, key_original:str, key_cut:str):
-        """
-        Cut from the key_original file to key_cut
-        and displays the successfully cut file
-        """
-        dict_key_original = {
-            'Bucket' : self.bucket_name,
-            'Key': key_original
-        }
-        
-        if not(self.ensure_key(key=key_original)):
-            print(f'file: {key_original} is not exist')
-            
-        elif self.ensure_key(key=key_cut):
-            print(f'file: {key_cut} is already exist')
-            
-        else:
-            self.s3_client.copy(CopySource=dict_key_original, Bucket=self.bucket_name, Key=key_cut)
-            self.s3_client.delete_object(Bucket=self.bucket_name, Key=key_original)
-            print(f'file: {key_cut} was successfully cut from {key_original}')
-
-
-   
-    def cut_list_keys(self, keys_original:list[str], keys_cut:list[str]):
-        """
-        Cut from list of the keys_original file to the list of keys_cut
-        and displays the list of the successfully cut files
-        """
-        if len(keys_original) != len(keys_cut):
-            print("Not all keys are provided")
-        
-        else:
-            for key_original, key_cut in zip(keys_original, keys_cut):
-                self.cut_key(key_original, key_cut)
-
-
-
-    def copy_key(self, key_original:str, key_copy:str):
-        """
-        Copy from the key_original file to key_copy
-        and displays the successfully copy file
-        """
-        dict_key_original = {
-            'Bucket' : self.bucket_name ,
-            'Key': key_original
-        }
-        
-        if not(self.ensure_key(key=key_original)):
-            print(f'file: {key_original} is not exist')
-            
-        elif self.ensure_key(key=key_copy):
-            print(f'file: {key_copy} is already exist')
-            
-        else:
-            self.s3_client.copy(CopySource=dict_key_original, Bucket=self.bucket_name, Key=key_copy)
-            print(f'file: {key_copy} was successfully copy from {key_original}')
-
-
- 
-    def copy_list_keys(self, keys_original:list[str], keys_copy:list[str]):
-        """
-        Copy from list of the key_original file to the list of key_copy
-        and displays the list of the successfully copy files
-        """
-        if len(keys_original) != len(keys_copy):
-            print("Not all keys are provided")
-        
-        else:
-            for key_original, key_copy in zip(keys_original, keys_copy):
-                self.cut_key(key_original, key_copy)
-
-
-   
-    def rename_key(self, key_original:str, new_name:str):
-        """
-        Renames from the key_original file to new_name
-        and displays the successfully renamed file
-        """
-        dict_key_original = {
-            'Bucket' : self.bucket_name,
-            'Key': key_original
-        }
-        new_key = key_original[:-len(key_original.split("/")[-1])] + new_name
-        
-        if not(self.ensure_key(key=key_original)):
-            print(f'file: {key_original} is not exist')
+        if not(self.ensure_key(key=original_key)):
+            print(f"AWSS3 >> Original key {original_key} does not exist.")
             
         elif self.ensure_key(key=new_key):
-            print(f'file: {new_key} is already exist')
+            print(f"AWSS3 >> New key {new_key} already exist.")
             
         else:
-            self.s3_client.copy(CopySource=dict_key_original, Bucket=self.bucket_name, Key=new_key)
-            self.s3_client.delete_object(Bucket=self.bucket_name, Key=key_original)
-            print(f'file: {key_original} was successfully renamed to {new_key}')
+            self.s3_client.copy(CopySource={'Bucket' : self.bucket_name,'Key': original_key}, 
+                                Bucket=self.bucket_name, 
+                                Key=new_key)
+            if replace: self.s3_client.delete_object(Bucket=self.bucket_name, Key=original_key)
 
-     
-    def rename_list_keys(self, keys_original:list[str], new_names:list[str]):
+        return None
+
+   
+    def edit_keys(self, original_keys: list[str], new_keys: list[str]):
         """
-        Renames from the list of the key_original file to the list of the new_name
-        and displays the successfully renamed file
+        Cut from list of the keys_original file to the list of keys_cut
+        and displays the list of the successfully cut files.
+
+        # TODO: parallelize the process
         """
-        if len(keys_original) != len(new_names):
-            print("Not all keys are provided")
-        
-        else:
-            for key_original, new_name in zip(keys_original, new_names):
-                self.cut_key(key_original, new_name)
+
+        for original_key, new_key in zip(original_keys, new_keys):
+            self.cut_key(original_key, new_key)
 
 
-
-    def upload_file(self, key:str, path:str):
+    def upload_file(self, key: str, path: str):
         """
-        Uploads a local file (path) into its cloud location (key)
+        Uploads a local file (path) into its cloud location (key).
         """
         
         if not os.path.exists(path):
-            raise ValueError("S3Client >> Local file path does not exist. Check the path argument")
+            raise ValueError("AWSS3 >> Local file path does not exist. Check the path argument.")
 
         self.s3_client.upload_file(Bucket=self.bucket_name, 
-                                Key=key,
-                                Filename=path)
+                                   Key=key,
+                                   Filename=path)
         
         return None
 
 
-    def upload_files(self, keys:list[str], paths:list[str]):
+    def upload_files(self, keys: list[str], paths: list[str]):
         """
-        Uploads a list of local files (paths) into their cloud locations (keys)
+        Uploads a list of local files (paths) into their cloud locations (keys).
         """
 
         if len(keys) != len(paths):
-            raise ValueError(f"S3Client >> Number of keys ({len(keys)}) doesn't match the number of paths ({len(paths)}). Upload aborted.")
+            raise ValueError(f"AWSS3 >> Number of keys ({len(keys)}) doesn't match the number of paths ({len(paths)}). Upload aborted.")
 
         failed_files = []
-        print(f"S3Client >> Uploading {len(keys)} files on the cloud")
+        print(f"AWSS3 >> Uploading {len(keys)} files on the cloud")
         with tqdm(total=len(paths)) as pbar:
             with ThreadPoolExecutor(max_workers=2*os.cpu_count()) as executor:
                 futures = []
@@ -521,14 +433,14 @@ class AWSS3(AWS):
                     try:
                         future.result()
                     except Exception as e:
-                        print(f"S3Client >> Error uploading file: {e}")
+                        print(f"AWSS3 >> Error uploading file: {e}")
                         failed_files.append(future)
                     pbar.update(1)
 
         return None
 
      
-    def upload_directory(self, key:str, path:str):
+    def upload_directory(self, key: str, path: str):
         """
         Uploads local directory to key from bucket
         and displays the successfully uploaded file
@@ -537,11 +449,11 @@ class AWSS3(AWS):
         if not key.endswith("/"):
             key += "/"
         if not os.path.exists(path):
-            raise ValueError(f"S3Client >> Upload folder '{path}' does not exist")
+            raise ValueError(f"AWSS3 >> Upload folder '{path}' does not exist")
         file_list = os.listdir(path)
 
         failed_files = []
-        confirm = input(f"S3Client >> Uploading files from folder '{path}' into '{key}'. Confirm [Y/n] ? ")
+        confirm = input(f"AWSS3 >> Uploading files from folder '{path}' into '{key}'. Confirm [Y/n] ? ")
         if confirm in ["Y", "y"]:
             with tqdm(total=len(file_list)) as pbar:
                 with ThreadPoolExecutor(max_workers=2*os.cpu_count()) as executor:
@@ -556,18 +468,12 @@ class AWSS3(AWS):
                         try:
                             future.result()
                         except Exception as e:
-                            print(f"S3Client >> Error uploading file: {e}")
+                            print(f"AWSS3 >> Error uploading file: {e}")
                             failed_files.append(future)
                         pbar.update(1)
         else:
-            print("S3Client >> Upload aborted")
+            print("AWSS3 >> Upload aborted")
 
         return failed_files
-
-
-if __name__ == "__main__":
-    session = S3Client(aws_access_key_id=AWS_KEY_ID,
-                       aws_secret_access_key=AWS_KEY_ACCESS,
-                       bucket_name="capeng-dataverse")
     
     
