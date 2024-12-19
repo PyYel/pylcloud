@@ -6,10 +6,6 @@ import sys
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-AWS_DIR_PATH = os.path.dirname(os.path.dirname(__file__))
-if __name__ == "__main__":
-    sys.path.append(os.path.dirname(AWS_DIR_PATH))
-
 from aws import AWS
 
 
