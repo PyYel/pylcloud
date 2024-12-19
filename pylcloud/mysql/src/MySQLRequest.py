@@ -41,8 +41,8 @@ class RequestData():
         >>> SELECT label_key, transcription FROM Audio_transcription
         >>> [(label_key1, text1), (label_key2, text2), ...]
 
-        Args
-        ----
+        Parameters
+        ----------
         - table_name: the name of the table to select rows from
         - SELECT: the name of the columns to select data from
         """
@@ -67,8 +67,8 @@ class RequestData():
 
         >>> f"SELECT {SELECT} FROM {FROM} WHERE {WHERE}={VALUES}"; 
 
-        Args
-        ----
+        Parameters
+        ----------
         - SELECT: the names of the columns to select data from
         - FROM: the name of the table to select data from
         - WHERE: the name of the column to apply the condition on

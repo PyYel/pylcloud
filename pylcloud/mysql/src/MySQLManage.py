@@ -20,8 +20,8 @@ class ManageSchemas():
         """
         The default connection is ``main.CONNECTION``. If ``conn`` is specified, it is used instead.
 
-        Args
-        ----
+        Parameters
+        ----------
         conn: a ``mysql.connector.MySQLConnection`` to a MySQL database. By default, the ``main.CONNECTION`` is used.
         """
 

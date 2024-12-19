@@ -19,8 +19,8 @@ class RemoveData():
         """
         The default connection is ``main.CONNECTION``. If ``conn`` is specified, it is used instead.
 
-        Args
-        ----
+        Parameters
+        ----------
         conn: a ``mysql.connector.MySQLConnection`` to a MySQL database. By default, the ``main.CONNECTION`` is used.
         """
 
@@ -38,8 +38,8 @@ class RemoveData():
         - Datasets
 
 
-        Args
-        ----
+        Parameters
+        ----------
         - dataset_name: the name of the dataset to delete. Every record referencing the Datasets primary key
         ``'DataHive/Data/{dataset_name}/'`` will be subsequently deleted, as stated above.
 
@@ -101,8 +101,8 @@ class RemoveData():
         """
         Removes data from a table under a condition
 
-        Args
-        ----
+        Parameters
+        ----------
         FROM: the table to remove data from
         WHERE: the condition on the columns
         VALUEs: the values these columns must match. Must be a tuple, even if only one value is given 

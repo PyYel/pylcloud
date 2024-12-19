@@ -22,8 +22,8 @@ class InsertData():
         """
         The default connection is ``main.CONNECTION``. If ``conn`` is specified, it is used instead.
 
-        Args
-        ----
+        Parameters
+        ----------
         conn: a ``mysql.connector.MySQLConnection`` to a MySQL database.
         """
         
@@ -106,8 +106,8 @@ class InsertData():
         """
         Affects a user to a project.
 
-        Args
-        ----
+        Parameters
+        ----------
         - user_name: the name of the user to assign
         - project_name: the name of the project to assign the user to
 
@@ -197,8 +197,8 @@ class InsertData():
         """
         Inserts a record into the Batches_Datapoints table.
 
-        Args
-        ----
+        Parameters
+        ----------
 
         """
 
@@ -223,8 +223,8 @@ class InsertData():
         """
         Inserts a record into the Batches_Labels table.
 
-        Args
-        ----
+        Parameters
+        ----------
 
         """
 
@@ -247,8 +247,8 @@ class InsertData():
         """
         Inserts a record into the Batches_users table. 
 
-        Args
-        ----
+        Parameters
+        ----------
 
         """
 
@@ -270,8 +270,8 @@ class InsertData():
         """
         Inserts a record into the Batches_Datasets table. 
 
-        Args
-        ----
+        Parameters
+        ----------
 
         """
 
@@ -303,8 +303,8 @@ class InsertData():
 
         TODO: insert multiple records with one commit to speed up the process (or parallelize ?)
 
-        Args
-        ----
+        Parameters
+        ----------
 
         """
 
@@ -507,8 +507,8 @@ class InserDataUtils(InsertData):
         Uploads labels from a pandas Dataframe whose columns are the same as the table to push
         the labels into.
 
-        Args
-        ----
+        Parameters
+        ----------
         labelset_type: the name of the table to reference the labels into, i.e. the type of task that is annotated
         labelset_frame: the pandas DataFrame to write into the label table
         labelset_path: the path to the CSV file recording the labels to write into the label table
@@ -655,8 +655,8 @@ class InserDataUtils(InsertData):
         The labels are saved as a csv in the same folder, so it can then easily be added
         to the database using the `upload_labelset` method. 
 
-        Args
-        ----
+        Parameters
+        ----------
         - format: the conversion to apply to the labels
             - "yolo": reads the YOLO format (x_center, y_center, width, height) into standard 
             - "coco": reads the COCO format (x_min, y_min, width, height) into standard 
@@ -727,8 +727,8 @@ class InserDataUtils(InsertData):
         Hidden method.
         Returns the labels and bbox positions of a txt file in YOLO format (xywh) into stadard (xyxy) format.
 
-        Args
-        ----
+        Parameters
+        ----------
         - format: the conversion to apply to the labels
             - "yolo": reads the YOLO format (x_center, y_center, width, height) into standard 
             - "coco": reads the COCO format (x_min, y_min, width, height) into standard 
