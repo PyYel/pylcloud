@@ -22,7 +22,7 @@ class YesSQLMySQL(YesSQL):
         Initializes the database connector helper. The database will still require to be created and/or connected to.
         """
         
-        self.connect_database
+        self.connect_database()
         self.database_name = database_name.lower()
         self.host = host
         self.user = user
