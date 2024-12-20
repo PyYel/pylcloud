@@ -1,19 +1,12 @@
 import os, sys
 import hashlib
-import ssl
-import urllib3
 
-from elasticsearch import Elasticsearch, helpers, NotFoundError
 from abc import ABC
-from datetime import datetime, timedelta
- 
-# Suppress only the InsecureRequestWarning
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
-class Elasticsearch(ABC):
+class NoSQL(ABC):
     """
-    An Elasticsearch DB connection helper.
+    NoSQL databases API helper.
     """
     def __init__(self):
         """

@@ -1,7 +1,5 @@
 import os, sys
 
-import pandas as pd
-
 from datetime import datetime, timedelta
 import hashlib
 
@@ -11,23 +9,15 @@ import json
 import ssl
 import urllib3
  
-# Suppress only the InsecureRequestWarning
-
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
- 
-MAIN_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-if __name__ == "__main__":
-    sys.path.append(MAIN_DIR)
-    os.chdir(MAIN_DIR)
-
-from constants import ELASTIC_API_KEY, ELASTIC_CERTIFICATE, ELASTIC_PASSWORD, ELASTIC_USERNAME, HOST_URL
-from api import APIClient
+from nosql import NoSQL
 
 
-class APIClientElastic(APIClient):
-
-
+class NoSQLElasticsearch(NoSQL):
+    """
+    Elasticsearch Python API helper.
+    """
     def __init__(self, base_url: str = HOST_URL, config_path = None):
         super().__init__(base_url, config_path)
 
