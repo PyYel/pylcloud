@@ -8,7 +8,7 @@ from abc import ABC
 
 class YesSQL(ABC):
     """
-    A parent class that notably manages the global MySQL database server.
+    A parent class that notably manages the global YesSQL database server.
     """
     def __init__(self, db_type: str = "mysql") -> None:
         """
@@ -20,7 +20,7 @@ class YesSQL(ABC):
         
         if db_type == "mysql":
             # TODO: wrap (reroute) connect method to corresponding db_type method 
-            self._connect_database()
+            None
         else:
             print(f"YesSQL >> DB type '{db_type}' is not supported.")
             sys.exit(1)
@@ -39,6 +39,7 @@ class YesSQL(ABC):
         Connects to the database and creates a connector object ``conn``. 
         """
 
+        conn = None
         try:
             conn = mysql.connector.connect(
                 host=host,
@@ -50,16 +51,20 @@ class YesSQL(ABC):
             if conn.is_connected():
                 cursor = conn.cursor()
                 cursor.execute(f"USE {database_name};")
-                print(f"MySQL >> Connected to database schema '{database_name}'.")
+                print(f"YesSQL >> Connected to database schema '{database_name}'.")
 
         except mysql.connector.Error as e:
-            print(f"MySQL >> MySQL connection error: {e}")
             if e.errno == 1045:
-                print("MySQL >> MySQL login credential error, program interrupted.")
+                print("YesSQL >> Login credential error, program interrupted.")
                 return sys.exit(1)
+            if e.errno == 2003:
+                print(f"YesSQL >> Host server '{host}:{port}' is unrecheable, program interrupted.")
+                return sys.exit(1)
+            else:
+                print(f"YesSQL >> Connection error: {e}")
 
             if create_if_not_exists:
-                print(f"MySQL >> Trying to create a database '{database_name}' instead.")
+                print(f"YesSQL >> Trying to create a database schema '{database_name}' instead.")
                 try:
                     conn = mysql.connector.connect(
                         host=host,
@@ -73,14 +78,36 @@ class YesSQL(ABC):
                     cursor.execute(f"CREATE DATABASE IF NOT EXISTS {database_name};")
                     cursor.execute(f"USE {database_name};")
                     conn.commit()
-                    print(f"MySQL >> Database '{database_name}' successfully created and connected to.")
+                    print(f"YesSQL >> Database '{database_name}' successfully created and connected to.")
 
                 except mysql.connector.Error as e:
-                    conn.rollback()
-                    print(f"MySQL >> MySQL error when creating/using database '{database_name}':", e)
+                    if conn is not None:
+                        conn.rollback()
+                        print(f"YesSQL >> YesSQL succesfully connected to database host, but an error occured when creating/using schema '{database_name}':", e)
+                        return sys.exit(1)
+                    else:
+                        print(f"YesSQL >> Could not connect to database host, program interrupted.")
+                        return sys.exit(1)
+
+            else:
+                print(f"YesSQL >> Could not connect to database host, program interrupted.")
+                return sys.exit(1)
 
         return conn
     
+
+    def connect_database(self, 
+                         host: str = "127.0.0.1",
+                         user: str = "user",
+                         password: str = "password",
+                         database_name: str = "my_db",
+                         port: str = "3306",
+                         create_if_not_exists: bool = True):
+        """
+        Connects to the database and creates a connector object ``conn``. 
+        """
+        return self._connect_database(host=host, user=user, password=password, database_name=database_name, port=port, create_if_not_exists=create_if_not_exists)
+
 
     def close_database(self):
         """
@@ -89,7 +116,7 @@ class YesSQL(ABC):
 
         if self.conn:
             self.conn.close()
-            print(f"MySQL >> Disconnected from database schema '{database_name}'.")
+            print(f"YesSQL >> Disconnected from database schema '{database_name}'.")
 
 
     def _init_database_from_json(self, json_file):
@@ -99,7 +126,7 @@ class YesSQL(ABC):
         with open(json_file, 'r') as file:
             setup = json.load(file)
         
-        print(f"MySQL >> Setting up the database '{setup['database']}' tables")
+        print(f"YesSQL >> Setting up the database '{setup['database']}' tables")
         cursor = self.conn.cursor()
         for table in setup['tables']:
 
@@ -121,11 +148,11 @@ class YesSQL(ABC):
                     create_table_sql = f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(column_definitions)})"
                     cursor.execute(create_table_sql)
                     conn.commit()
-                    print(f"MySQL >> Table '{table['name']}' successfully created")
+                    print(f"YesSQL >> Table '{table['name']}' successfully created")
                 
             except mysql.connector.Error as e:
                 conn.rollback()
-                print(f"MySQL >> MySQL error when creating table '{table['name']}':", e)
+                print(f"YesSQL >> YesSQL error when creating table '{table['name']}':", e)
 
 
     def _check_table_exists(self, table_name):
@@ -138,6 +165,6 @@ class YesSQL(ABC):
             else:
                 return False
         except mysql.connector.Error as e:
-            print(f"MySQL >> MySQL error when creating table '{table_name}':", e)
+            print(f"YesSQL >> YesSQL error when creating table '{table_name}':", e)
             return False
         
