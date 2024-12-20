@@ -6,6 +6,7 @@ if __name__ == "__main__":
 
 from aws import AWSBedrockKnowledgeBase, AWSBedrockModels, AWSS3
 
+# Test import and init
 AWSS3("", "", "")
 AWSBedrockKnowledgeBase("", "")
 AWSBedrockModels("", "")
