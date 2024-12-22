@@ -37,8 +37,8 @@ class AWSS3(AWS):
             can be considered as a default input/output folder. If None, ``/temp`` folder will
             be created in the current working directory.
 
-        Note
-        ----
+        Notes
+        -----
         - An instance of this class can connect to only one bucket.
         Create other instances to connect to multiple buckets at once.
         - The ``/temp`` folder should be a folder that can be completely erased.
@@ -358,8 +358,8 @@ class AWSS3(AWS):
             If ``False`` the ``original_key`` is kept, hence resulting in a copy-paste action.
             Otherwise, is similar to either a cut-paste or rename acion. 
 
-        Note
-        ----
+        Notes
+        -----
         - Either way, the key is copied to a ``new_key`` cloud path. If ``replace`` is set to ``True``, the old
         version of the key is deleted after.
         """

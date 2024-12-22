@@ -36,8 +36,8 @@ class AWSBedrockModels(AWS):
         aws_session_token: str, 'uuid.uuid4()'
             A unique session token.
 
-        Note
-        ----
+        Notes
+        -----
         - Connects to both 'bedrock' and 'bedrock-runtime' services endpoints.
 
         Exemple
