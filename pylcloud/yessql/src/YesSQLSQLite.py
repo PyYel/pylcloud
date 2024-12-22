@@ -1,295 +1,224 @@
-import os, sys
-import mysql.connector
-import json
-
-from mysql.connector import Error
-from abc import ABC
+import sqlite3
+import sys
+import os
 
 from yessql import YesSQL
 
+
 class YesSQLSQLite(YesSQL):
     """
-    A parent class that notably manages the global MySQL database server.
+    A class that manages SQLite database operations.
     """
-    def __init__(self, 
-                 database_name="my_db",
-                 host="127.0.0.1",
-                 user="admin",
-                 password="password",
-                 port="3306"
-                 ) -> None:
+    def __init__(self, database_path: str = "database.db") -> None:
         """
-        Initializes the database connector helper. The database will still require to be created and/or connected to.
-        """
-        
-        self.connect_database
-        self.database_name = database_name.lower()
-        self.host = host
-        self.user = user
-        self.password = password
-        self.port = port
+        Initializes the SQLite database helper and connects to the database file.
+        If the database file does not exist, it will be created.
 
-        self.conn = None
+        Parameters
+        ----------
+        database_path: str, '../database.db'
+            The path to the SQLite database file. Default path is the current working directory.
+        """
+        super().__init__(db_type="sqlite")
+
+        self.database_path = database_path
+
+        self.conn = self.connect_database(database_path=self.database_path)
 
         return None
-
-
-    def close_database(self):
+    
+    
+    def connect_database(self, database_path: str):
         """
-        Closes the database linked to the connector ``conn``.
-        """
+        Connects to the SQLite database file and returns a connection object.
+        If the file doesn't exist, it will be created.
 
+        Parameters
+        ----------
+        database_path: str
+            Path to the SQLite database file.
+
+        Returns
+        -------
+        conn: sqlite3.Connection
+            A connection object to the SQLite database.
+        """
+        try:
+            self.conn = sqlite3.connect(database_path)
+            print(f"YesSQLSQLite >> Connected to database at '{database_path}'.")
+            return self.conn
+        except sqlite3.Error as e:
+            print(f"YesSQLSQLite >> SQLite error: {e}")
+            sys.exit(1)
+
+        return None
+    
+
+    def disconnect_database(self):
+        """
+        Closes the connection to the SQLite database.
+        """
         if self.conn:
             self.conn.close()
-            print(f"MySQL >> Disconnected from database schema '{self.database_name}'.")
-
-
-    def drop_database(self):
-        """
-        Deletes the whole database (schema). Must be connected to a user with admin rights, system schemas can't be dropped.
-        """
-
-        try:
-            cursor = self.conn.cursor()
-
-            databases_list = self.list_databases()
-            connected_database = self.conn.database
-            if connected_database is None:
-                print(f"MySQL >> No databse connected, only a connected database (schema) may be dropped")
-            elif (connected_database in databases_list) and (connected_database not in ["information_schema", "mysql", "performance_schema", "sys"]):
-                cursor.execute(f"DROP DATABASE {connected_database};")
-                print(f"MySQL >> Successfully dropped '{connected_database}' database schema.")
-            elif (connected_database in ["information_schema", "mysql", "performance_schema", "sys"]):
-                print(f"MySQL >> Trying to drop a forbidden database schema: '{connected_database}'.")
-            else:
-                print(f"MySQL >> Trying to drop an unknown database schema: '{connected_database}'.")
-
-        except mysql.connector.Error as e:
-            self.conn.rollback()
-            print(f"MySQL >> MySQL error when dropping database schema:", e)
+            print(f"YesSQLSQLite >> Disconnected from database '{os.path.basename(self.database_path)}'.")
 
         return None
     
 
-    def setup_database(self):
-        """
-        Generates the main structure of the database. Most parameters come from .json files. 
-        Note that if not existing yet, the database is created when connected to, i.e. when creating the conn object.
-        """
-
-        self._init_database_from_json(json_file=os.path.join(DATABASE_DIR_PATH, "json", "setup.json"))
-
-        return None
+    def drop_database(self, database_name):
+        return super().drop_database(database_name)
     
 
-    def list_databases(self, display=False):
+    def drop_table(self, table_name: str):
         """
-        Prints and returns the existing databases (schemas) visible to the user on the server
-        """
-
-        cursor = self.conn.cursor()
-
-        cursor.execute("SHOW DATABASES;")
-        databases_list = cursor.fetchall()
-        databases_list = [db[0] for db in databases_list] # tuples singleton to list
-        if display:
-            print("MySQL >> Visible databases (schemas):", databases_list)
-
-        return databases_list
-
-
-    def delete_where(self, FROM: str, WHERE: str, VALUES: tuple[str]):
-        """
-        Removes data from a table under a condition
+        Drops a table if it exists in the SQLite database.
 
         Parameters
         ----------
-        FROM: the table to remove data from
-        WHERE: the condition on the columns
-        VALUEs: the values these columns must match. Must be a tuple, even if only one value is given 
-        
-        Examples
-        --------
-        >>> delete_where(FROM="datapoints", WHERE="datapoint_path", VALUES=("DataHive/Data/dataset_example/001.pg",))
+        table_name: str
+            The name of the table to drop.
         """
-
         try:
             cursor = self.conn.cursor()
-
-            format_strings = ','.join(['%s'] * len(VALUES))
-            query = f"DELETE FROM {FROM} WHERE {WHERE}=({format_strings});"
-            cursor.execute(query, VALUES)
-
+            cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
             self.conn.commit()
+            print(f"YesSQLSQLite >> Table '{table_name}' dropped successfully.")
+        except sqlite3.Error as e:
+            print(f"YesSQLSQLite >> SQLite error when dropping table '{table_name}': {e}")
 
-        except mysql.connector.Error as e:
-            print("RemoveData >> MySQL error:", e)
+        return None
 
+
+    def create_table(self, table_name: str, column_definitions: list[str]):
+        """
+        Creates a table in the SQLite database.
+
+        Parameters
+        ----------
+        table_name: str
+            The name of the table to create.
+        column_definitions: list[str]
+            The column definitions in SQL syntax.
+
+        Example
+        -------
+        >>> self.create_table('users', ['username TEXT PRIMARY KEY', 'password TEXT NOT NULL'])
+        """
+        try:
+            cursor = self.conn.cursor()
+            create_table_sql = f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(column_definitions)})"
+            cursor.execute(create_table_sql)
+            self.conn.commit()
+            print(f"YesSQLSQLite >> Table '{table_name}' created successfully.")
+        except sqlite3.Error as e:
+            print(f"YesSQLSQLite >> SQLite error when creating table '{table_name}': {e}")
+    
         return None
     
 
-    def select(self, table_name:str, SELECT:str="*"):
+    def list_databases(self, system_db = False):
+        return super().list_databases(system_db)
+    
+
+    def list_tables(self):
         """
-        Allows to input a simple SELECT SQL query.
-        Returns a list (rows) of tuples (columns)
+        Lists all tables in the SQLite database.
 
-        Eg: SELECT {SELECT} FROM {table_name}
-        >>> SELECT label_key, transcription FROM Audio_transcription
-        >>> [(label_key1, text1), (label_key2, text2), ...]
-
-        Parameters
-        ----------
-        - table_name: the name of the table to select rows from
-        - SELECT: the name of the columns to select data from
-        """
-
-        try: 
-            cursor = self.conn.cursor()
-            cursor.execute(f"SELECT {SELECT} FROM {table_name};")
-            rows = cursor.fetchall()
-
-            return rows
-
-        except mysql.connector.Error as e:
-            print("RequestData >> MySQL error:", e)
-
-
-    def select_where(self, 
-                     SELECT: str,
-                     FROM: str,
-                     WHERE: str,
-                     VALUES: tuple[str]):
-        """
-        Selects columns from a table under one condition.
-
-        >>> f"SELECT {SELECT} FROM {FROM} WHERE {WHERE}={VALUES}"; 
-
-        Parameters
-        ----------
-        - SELECT: the names of the columns to select data from
-        - FROM: the name of the table to select data from
-        - WHERE: the name of the column to apply the condition on
-        - VALUES: the condition, i.e. the value the cell element must be equal to
+        Returns
+        -------
+        tables: list[str]
+            A list of table names.
         """
         try:
             cursor = self.conn.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            tables = [row[0] for row in cursor.fetchall()]
+            print(f"YesSQLSQLite >> Tables in database: {tables}")
+            return tables
+        except sqlite3.Error as e:
+            print(f"YesSQLSQLite >> SQLite error when listing tables: {e}")
+            return []
+    
 
-            format_strings = ','.join(['%s'] * len(VALUES))
-            sql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE}=({format_strings});"
-            cursor.execute(sql, VALUES)
-            rows = cursor.fetchall()
-            return rows
-        
-        except mysql.connector.Error as e:
-            print("RequestData >> MySQL error:", e)
-            self.conn.rollback()
-            return None
-        
-
-    def select_like(self, 
-                    SELECT: str,
-                    FROM: str,
-                    WHERE: tuple[str],
-                    LIKE: tuple[str]):
-            """
-            Selects columns from a table under one condition.
-
-            >>> f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} LIKE {VALUES}";
-
-            Args
-            ----
-            - SELECT: the names of the columns to select data from
-            - FROM: the name of the table to select data from
-            - WHERE: the name of the column to apply the condition on
-            - VALUES: the condition, i.e. the value the cell element must be equal to
-            """
-            try:
-                cursor = self.conn.cursor()
-
-                sql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} LIKE %s;"
-                cursor.execute(sql, LIKE)
-                rows = cursor.fetchall()
-                return rows
-            
-            except mysql.connector.Error as e:
-                print("RequestData >> MySQL error:", e)
-                self.conn.rollback()
-                return None
-        
-
-
-    def insert(self,
-               table_name: str,
-               **kwargs):
+    def insert(self, table_name: str, **kwargs):
         """
-        Inserts the input kwargs into the table ``table_name``. 
-        """
+        Inserts data into a table.
 
+        Parameters
+        ----------
+        table_name: str
+            The name of the table to insert data into.
+        kwargs: dict
+            Column-value pairs to insert.
+
+        Example
+        -------
+        >>> self.insert('users', username='john_doe', password='securepassword')
+        """
         try:
             cursor = self.conn.cursor()
-
-            fields = ",".join(list(kwargs.keys()))
-            placeholders = ",".join(list([r'%s']*len(fields)))
+            columns = ', '.join(kwargs.keys())
+            placeholders = ', '.join(['?'] * len(kwargs))
             values = tuple(kwargs.values())
-
-            cursor.execute(f"INSERT INTO users_projects {fields} VALUES ({placeholders});", 
-                           (values))
-
+            cursor.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", values)
             self.conn.commit()
-
-        except mysql.connector.Error as e:
-            print("InsertData >> MySQL error:", e)
-            self.conn.rollback()
+            print(f"YesSQLSQLite >> Data inserted into table '{table_name}'.")
+        except sqlite3.Error as e:
+            print(f"YesSQLSQLite >> SQLite error when inserting data into table '{table_name}': {e}")
 
         return None
     
 
-    def _init_database_from_json(self, json_file):
+    def select(self, table_name: str, columns: str = "*"):
         """
-        Creates all the tables of the connected database by reading a setup json file
+        Retrieves all data from specified columns in a table.
+
+        Parameters
+        ----------
+        table_name: str
+            The name of the table to select data from.
+        columns: str
+            The columns to retrieve (default is '*').
+
+        Returns
+        -------
+        rows: list[tuple]
+            The rows retrieved from the table.
         """
-        with open(json_file, 'r') as file:
-            setup = json.load(file)
-        
-        print(f"MySQL >> Setting up the database '{setup['database']}' tables")
-        cursor = self.conn.cursor()
-        for table in setup['tables']:
-
-            table_name = table["name"]
-            columns = table["columns"]
-
-            try:
-
-                column_definitions = []
-                for column in columns:
-                    if "type" in column:
-                        col_def = f"{column['name']} {column['type']} {column['constraints']}".strip()
-                        column_definitions.append(col_def)
-                    else:  # Foreign key constraints
-                        col_def = f"{column['name']} {column['constraints']}".strip()
-                        column_definitions.append(col_def)
-
-                if not self._check_table_exists(table_name):
-                    create_table_sql = f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(column_definitions)})"
-                    cursor.execute(create_table_sql)
-                    self.conn.commit()
-                    print(f"MySQL >> Table '{table['name']}' successfully created")
-                
-            except mysql.connector.Error as e:
-                self.conn.rollback()
-                print(f"MySQL >> MySQL error when creating table '{table['name']}':", e)
-
-
-    def _check_table_exists(self, table_name):
         try:
             cursor = self.conn.cursor()
-            cursor.execute(f"SHOW TABLES LIKE '{table_name}'")
-            result = cursor.fetchone()
-            if result:
-                return True
-            else:
-                return False
-        except mysql.connector.Error as e:
-            print(f"MySQL >> MySQL error when creating table '{table_name}':", e)
-            return False
+            cursor.execute(f"SELECT {columns} FROM {table_name}")
+            rows = cursor.fetchall()
+            return rows
+        except sqlite3.Error as e:
+            print(f"YesSQLSQLite >> SQLite error when selecting data from table '{table_name}': {e}")
+            return []
         
+    
+    def select_where(self, table_name: str, condition: str, values: tuple):
+        """
+        Retrieves data from a table under a specific condition.
+
+        Parameters
+        ----------
+        table_name: str
+            The name of the table to select data from.
+        condition: str
+            The WHERE condition in SQL syntax.
+        values: tuple
+            The values to use in the condition.
+
+        Returns
+        -------
+        rows: list[tuple]
+            The rows retrieved from the table.
+        """
+        try:
+            cursor = self.conn.cursor()
+            query = f"SELECT * FROM {table_name} WHERE {condition}"
+            cursor.execute(query, values)
+            rows = cursor.fetchall()
+            return rows
+        except sqlite3.Error as e:
+            print(f"YesSQLSQLite >> SQLite error when selecting data with condition: {e}")
+            return []
