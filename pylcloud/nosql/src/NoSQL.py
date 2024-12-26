@@ -1,7 +1,7 @@
 import os, sys
 import hashlib
 
-from abc import ABC
+from abc import ABC, abstractmethod
 
 
 class NoSQL(ABC):
@@ -24,6 +24,82 @@ class NoSQL(ABC):
         return None
 
 
+    @abstractmethod
+    def connect_database(self, 
+                         host: str = "127.0.0.1",
+                         user: str = "user",
+                         password: str = "password",
+                         database_name: str = "my_db",
+                         port: str = "3306",
+                         create_if_not_exists: bool = False):
+        """
+        Connects to the database and creates a connector object ``conn``. 
+        """
+        pass
+    
+
+    @abstractmethod
+    def disconnect_database(self):
+        """
+        Closes the database linked to the connector ``conn``.
+        """
+        pass
+    
+
+    @abstractmethod
+    def list_databases(self, system_db: bool = False):
+        """
+        List the databases (schemas) present on a SQL server.
+        
+        Parameters
+        ----------
+        system_db: bool
+            Whereas returning the builtin databases if any, or not.
+        """
+        pass
+
+
+    @abstractmethod
+    def list_tables(self, database_name: str):
+        """
+        Lists all the tables present in a database (schemas).
+
+        Parameters
+        ----------
+        database_name: str
+            The name of the database (schema) to list tables from.
+
+        Notes
+        -----
+        - To list the existing databases, see ``list_databases()``.
+        """
+        pass
+
+
+    @abstractmethod
+    def create_table(self, **kwargs):
+        """
+        
+        """
+        pass
+    
+
+    @abstractmethod
+    def drop_database(self, database_name: str):
+        """
+        
+        """
+        pass
+
+
+    @abstractmethod
+    def drop_table(self, table_name: str):
+        """
+        
+        """
+        pass
+
+
     def _connect_database(self, 
                           base_url: str = "127.0.0.1",
                           username: str = "admin", 
@@ -32,41 +108,31 @@ class NoSQL(ABC):
         """
         Connects to the Elasticsearch DB, and creates the ``es`` connector.
         """
-        self.es = Elasticsearch(base_url, basic_auth=(username, password), verify_certs=False)
+        pass
 
 
-    def _hash_content(self, content: str, metadata_prefix: list[str] = [""]):
+    def _hash_content(self, content: str, prefixes: list[str]):
         """
-        Hashes an elastic payload into a unique id of format <metadata_prefix>-<hashed_content>. This is usefull to automatically overwrite a stored document 
-        when a document with the same timestamp and content is written into Elasticsearch.
+        Hashes a document content into a unique id of format <prefixes>-<hashed_content>. This is usefull to automatically overwrite 
+        a stored document when a document with the same timestamp and content is written into Elasticsearch. 
 
         Parameters
         ----------
         content: str
-            The text content to hash into a unique sequence.
-        metadata_prefix: list[str], ['']
-            A list of inputs joined with dashes '-' that prefixes the encoded hash, to help IDs management.
+            The text content to hash.
+        prefix: str
+            A list of prefixes (such as metadata, timestamps...) to prefix the hashed content with.
 
         Returns
         -------
         hashed_id: str
-            The created ID.
+            The unique hashed ID.
+
+        Examples
+        --------
+        >>> print(_hash_content(content='Message from Caroline: Merry Christmast!', prefixes=['2024/12/25', '103010']))
+        >>> '2024/12/25-103010-4432e1c6d1c4f0db2f157d501ae242a7'
         """
-        return f"{'-'.join(metadata_prefix)}-{hashlib.md5(content.encode()).hexdigest()}"
+        return f"{'-'.join(prefixes)}-{hashlib.md5(content.encode()).hexdigest()}"
 
-
-    def delete_index(self, index: str):
-        """Deletes an index and all its content from the Elasticsearch DB."""
-        try:
-            response = self.es.indices.delete(index=index)
-            print(f"Elasticsearch >> Index '{index}' deleted successfully.")
-        except Exception as e:
-            print(f"Elasticsearch >> Failed to delete index '{index}': {e}")
-        
-        return True
-
-
-    def list_indexes(self):
-        """Returns a list of the non-builtin indexes names."""
-        return [index['index'] for index in self.es.cat.indices(format='json') if not index['index'].startswith(".")]
 

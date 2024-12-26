@@ -7,6 +7,7 @@ from elasticsearch import Elasticsearch, helpers, NotFoundError
 import ssl
 import json
 import ssl
+from sympy import use
 import urllib3
  
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -18,24 +19,163 @@ class NoSQLElasticsearch(NoSQL):
     """
     Elasticsearch Python API helper.
     """
-    def __init__(self, base_url: str = HOST_URL, config_path = None):
-        super().__init__(base_url, config_path)
+    def __init__(self, host: str = "http://localhost:9200", user: str = "admin", password: str = "password"):
+        """
+        Initializes a connection to an Elasticsearch cluster.
+
+        Parameters
+        ----------
+        host: str
+            The Elasticsearch database adress and port.
+        user: str
+            The name of the user to connect with.
+        password: str
+            The selected user credentials.
+
+        Notes
+        -----
+        - If we were to compare Elasticsearch and SQL naming:
+            - A cluster is a database or schema.
+            - An index is a table (similar to a MongoDB collection).
+            - Documents are records.
+            - Fields are similar to columns (although they may be nested). 
+        - Similarly to a MySQL server, the PyYel library flattens the connection layers. This means, when connecting
+        to an Elasticsearch DB, you are directly connected to the cluster. To change of cluster, you should 'reconnect' to the server.
+        In the Elasticsearch context, this is more trivial, as two clusters must always hosted on different ports.
+        """
+        super().__init__()
+
+        self.host = host
+        self.user = user
+        self.password = password
 
         # TODO: Add connection certificate
-        self.es = Elasticsearch(self.base_url, basic_auth=(ELASTIC_USERNAME, ELASTIC_PASSWORD), verify_certs=False)
+        try:
+            self.connect_database(host=host, user=user, password=password)
+        except:
+            print(f"NoSQLElasticsearch >> An error occured when conneccting to '{host}'.")
 
         # Note:
         # The authentication credentials above are required to connect to Elasticsearch.
         # When connecting to Kibana server, custom users credentials should be used. They can be created from withing the Kibana server
         # interface, through the elastic superuser account (which are actually the credentials used above: ELASTIC_USERNAME, ELASTIC_PASSWORD)
 
+        return None
 
-    def _hash_log(self, log: dict):
+
+    def connect_database(self, 
+                         host: str = "127.0.0.1",
+                         user: str = "user",
+                         password: str = "password"):
         """
-        Hashes an elastic log payload into a unique id of format <timestamp>-<hashed_content>. This is usefull to automatically overwrite a stored log when a log with 
-        the same timestamp and content is written into Elasticsearch.  
+        Connects to the database and creates a connector object ``conn``. 
         """
-        return f"{log['@timestamp']}-{hashlib.md5(log['log']['message'].encode()).hexdigest()}"
+        self.es = Elasticsearch(host, basic_auth=(user, password), verify_certs=False)
+        return self.es
+    
+
+    def disconnect_database(self):
+        """
+        Closes the database linked to the connector ``conn``.
+        """
+        pass
+    
+
+    def list_databases(self, system_db: bool = False):
+        """
+        List the databases (clusters) present on an Elasticsearch DB server.
+        
+        Parameters
+        ----------
+        system_db: bool
+            Whereas returning the builtin databases if any, or not.
+        """
+        return self.es.info()
+
+
+    def create_table(self, **kwargs):
+        """See ``create_index()``."""
+        return self.create_index(**kwargs)
+
+
+    def create_index(self, index_name: str, properties: dict[str], shards: int = 1, replicas: int = 1):
+        """
+        Creates an index, with enforced properties.
+
+        Parameters
+        ----------
+        index_name: str
+            The name of the index to create.
+        properties: dict[str]
+            The index properties. Must be formatted as {'field':{'type': 'dtype'}}. See Examples below.
+        shards: int, 1
+            The number of shards to allocate.
+        replicas: int, 1
+            The number of replicas to create for each shard. Replicas may improve data availability and redundancy.
+        
+        Examples
+        --------
+        >>> index_name = "my_index"
+        >>> properties = {
+                    "title": {"type": "text"},
+                    "description": {"type": "text"},
+                    "timestamp": {"type": "date"},
+                }
+        >>> create_tables(index_name=index_name, properties=properties, shards=2, replicas=1)
+        """
+
+        settings = {
+            "settings": {
+                "number_of_shards": shards,
+                "number_of_replicas": replicas,
+            },
+            "mappings": {
+                "properties": properties
+            },
+        }
+
+        # Create the index
+        if not self.es.indices.exists(index=index_name):
+            self.es.indices.create(index=index_name, body=settings)
+            print(f"Index '{index_name}' created.")
+        else:
+            print(f"Index '{index_name}' already exists.")    
+
+
+    def drop_database(self, database_name: str):
+        """
+        Drops all the indexes from a cluster.
+        """
+        super().__init__()
+
+
+    def drop_table(self, table_name: str):
+        """
+        Deletes an index and all its content.
+        """
+        try:
+            response = self.es.indices.delete(index=table_name)
+            print(f"Elasticsearch >> Index '{table_name}' deleted successfully.")
+        except Exception as e:
+            print(f"Elasticsearch >> Failed to delete index '{table_name}': {e}")
+        
+        return True
+
+
+    def list_tables(self, database_name: str = None):
+        """
+        Returns a list of the non-builtin indexes names of the cluster.
+
+        Parameters
+        ----------
+        database_name: str
+            The name of the database (schema) to list tables from.
+
+        Notes
+        -----
+        - To list the existing databases, see ``list_databases()``.
+        """
+        return [index['index'] for index in self.es.cat.indices(format='json') if not index['index'].startswith(".")]
 
 
     def send_to_elastic(self, logs: dict[str], labels: dict[dict[str]], levels: dict[str] = "N/A", index_names: list[str] = ["test"]):
@@ -88,7 +228,7 @@ class NoSQLElasticsearch(NoSQL):
             actions = [
                 {
                     "_index": index_name,                   # Target indexes
-                    "_id": self._hash_log(log=log),         # Hashed id for log unicity
+                    "_id": self._hash_content(content=log),         # Hashed id for log unicity
                     "_source": log                          # Document content
                 }
                 for log in logs
@@ -201,7 +341,7 @@ class NoSQLElasticsearch(NoSQL):
                 "bool": {
                     "must": must_conditions,
                     "should": should_conditions,
-                    # At least 1 should condition must be matched. When there is no shoud condition input, the minimum must be set to zero
+                    # At least 1 should condition must be matched. When there is no should condition input, the minimum must be set to zero
                     "minimum_should_match": 1 if should_conditions else 0
                 }
             },
@@ -214,7 +354,7 @@ class NoSQLElasticsearch(NoSQL):
         # Execute the initial search query
         try:
             response = self.es.search(index=index_name, body=query)
-            documents = response['hits']['hits']
+            documents: list = response['hits']['hits']
         except NotFoundError as e:
             print(f"APIClientElastic >> Warning: Index not found: {e.info['error']['index']}")
             return []
@@ -294,10 +434,4 @@ class NoSQLElasticsearch(NoSQL):
     def list_indexes(self):
         """Returns a list of the non-builtin indexes names."""
         return [index['index'] for index in self.es.cat.indices(format='json') if not index['index'].startswith(".")]
-
-
-if __name__ == "__main__":
-
-    api = APIClientElastic()
-    print(api.list_indexes())
 
