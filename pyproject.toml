@@ -15,6 +15,7 @@ dependencies = [
     "boto3",
     "mysql-connector-python",
     "tqdm",
+    "elasticsearch",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
