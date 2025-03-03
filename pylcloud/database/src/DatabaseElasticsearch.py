@@ -108,7 +108,7 @@ class DatabaseElasticsearch(Database):
         """
 
         if ' ' in index_name:
-            print(f"DatabaseElasticsearch >> Index name can't contain blank space. Index name changed to: '{index_name.replace(' ', '-')}'.")
+            print(f"DatabaseElasticsearch >> Index name can't contain blank space. Index name changed to '{index_name.replace(' ', '-')}'.")
             index_name = index_name.replace(' ', '-')
 
         settings = {
@@ -162,9 +162,9 @@ class DatabaseElasticsearch(Database):
         """
         try:
             response = self.es.indices.delete(index=index_name)
-            print(f"Elasticsearch >> Index '{index_name}' deleted successfully.")
+            print(f"DatabaseElasticsearch >> Index '{index_name}' deleted successfully.")
         except Exception as e:
-            print(f"Elasticsearch >> Failed to delete index '{index_name}': {e}")
+            print(f"DatabaseElasticsearch >> Failed to delete index '{index_name}': {e}")
         
         return None
     
