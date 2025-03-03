@@ -108,7 +108,7 @@ class DatabaseElasticsearch(Database):
         """
 
         if ' ' in index_name:
-            print(f"DatabaseElasticsearch >> Index name can't contain blank space. Index name changed to: {index_name.replace(' ', '-')}.")
+            print(f"DatabaseElasticsearch >> Index name can't contain blank space. Index name changed to: '{index_name.replace(' ', '-')}'.")
             index_name = index_name.replace(' ', '-')
 
         settings = {
