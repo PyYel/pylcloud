@@ -107,6 +107,10 @@ class DatabaseElasticsearch(Database):
         >>> create_tables(index_name=index_name, properties=properties, shards=2, replicas=1)
         """
 
+        if ' ' in index_name:
+            print(f"DatabaseElasticsearch >> Index name can't contain blank space. Index name changed to: {index_name.replace(' ', '-')}.")
+            index_name = index_name.replace(' ', '-')
+
         settings = {
             "settings": {
                 "number_of_shards": shards,
@@ -228,11 +232,11 @@ class DatabaseElasticsearch(Database):
         if system_db:
             # built-in system indexes start with a dot
             indexes = [index['index'] for index in self.es.cat.indices(format='json')]
-            print(f"DatabaseElasticsearch >> Found indexes: {' | '.join(indexes)}")
+            print(f"DatabaseElasticsearch >> Found indexes: {', '.join(indexes)}")
             return indexes
         else:
             indexes = [index['index'] for index in self.es.cat.indices(format='json') if not index['index'].startswith(".")]
-            print(f"DatabaseElasticsearch >> Found indexes: {' | '.join(indexes)}")
+            print(f"DatabaseElasticsearch >> Found indexes: {', '.join(indexes)}")
             return indexes
         
         return None

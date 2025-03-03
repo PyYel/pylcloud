@@ -191,7 +191,7 @@ class DatabaseSQLite(Database):
             cursor = self.conn.cursor()
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
             tables = [row[0] for row in cursor.fetchall()]
-            print(f"DatabaseSQLite >> Tables in database: {' | '.join(tables)}")
+            print(f"DatabaseSQLite >> Tables in database: {', '.join(tables)}")
             return tables
         except sqlite3.Error as e:
             print(f"DatabaseSQLite >> SQLite error when listing tables: {e}")

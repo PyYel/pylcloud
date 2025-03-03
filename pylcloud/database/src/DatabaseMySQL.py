@@ -327,7 +327,7 @@ class DatabaseMySQL(Database):
             cursor = self.conn.cursor()
             cursor.execute("SHOW TABLES;")
             tables_list = [row[0] for row in cursor.fetchall()]  # Extract table names from the query result
-            if display: print(f"DatabaseMySQL >> Tables in '{self.database_name}': {tables_list}")
+            if display: print(f"DatabaseMySQL >> Tables in '{self.database_name}': {', '.join(tables_list)}")
             return tables_list
         
         except mysql.connector.Error as e:
