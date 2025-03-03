@@ -4,15 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyyel-cloudops"
-version = "0.0.1"
-description = "Init"
+version = "0.0.2"
+description = "Deployment tools"
 readme = "README.md"
 requires-python = ">=3.9"
 authors = [
     { name="Nayel BLIDI", email="nayel.blidi@gmail.com" }
 ]
 dependencies = [
-    "streamlit",
+    "boto3",
+    "mysql-connector-python",
+    "tqdm",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
