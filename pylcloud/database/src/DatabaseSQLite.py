@@ -2,7 +2,7 @@ import sqlite3
 import sys
 import os
 
-from database import Database
+from .Database import Database
 
 
 class DatabaseSQLite(Database):
@@ -168,8 +168,10 @@ class DatabaseSQLite(Database):
         return self.list_databases(*args, **kwargs)
     
     def list_databases(self):
-        """"""
-        raise NotImplementedError
+        """
+        SQLite can only be connected at one database at once, so this won't do anything but return the current database.
+        """
+        return [self.database_path]
 
 
     def _list_tables(self, *args, **kwargs):
@@ -189,7 +191,7 @@ class DatabaseSQLite(Database):
             cursor = self.conn.cursor()
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
             tables = [row[0] for row in cursor.fetchall()]
-            print(f"DatabaseSQLite >> Tables in database: {tables}")
+            print(f"DatabaseSQLite >> Tables in database: {' | '.join(tables)}")
             return tables
         except sqlite3.Error as e:
             print(f"DatabaseSQLite >> SQLite error when listing tables: {e}")

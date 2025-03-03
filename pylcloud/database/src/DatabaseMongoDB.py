@@ -1,9 +1,7 @@
 import os, sys
 
-import json
-import ssl
 
-from database import Database
+from .Database import Database
 
 
 class DatabaseMongoDB(Database):

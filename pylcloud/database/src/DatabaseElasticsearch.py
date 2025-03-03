@@ -11,7 +11,7 @@ import warnings
 warnings.filterwarnings('ignore', 'Connecting to .+ using TLS with verify_certs=False is insecure')
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-from database import Database
+from .Database import Database
 
 
 class DatabaseElasticsearch(Database):
@@ -52,7 +52,7 @@ class DatabaseElasticsearch(Database):
         try:
             self.connect_database(host=host, user=user, password=password)
         except Exception as e:
-            print(f"NoSQLElasticsearch >> An error occured when connecting to '{host}': {e}")
+            print(f"DatabaseElasticsearch >> An error occured when connecting to '{host}': {e}")
 
         # Note:
         # The authentication credentials above are required to connect to Elasticsearch.
@@ -120,9 +120,9 @@ class DatabaseElasticsearch(Database):
         # Create the index
         if not self.es.indices.exists(index=index_name):
             self.es.indices.create(index=index_name, body=settings)
-            print(f"NoSQLElasticsearch >> Index '{index_name}' created.")
+            print(f"DatabaseElasticsearch >> Index '{index_name}' created.")
         else:
-            print(f"NoSQLElasticsearch >> Index '{index_name}' already exists.")    
+            print(f"DatabaseElasticsearch >> Index '{index_name}' already exists.")    
 
 
     def _disconnect_database(self, *args, **kwargs):
@@ -144,7 +144,7 @@ class DatabaseElasticsearch(Database):
         """
         Drops all the indexes from a cluster.
         """
-        print("NoSQLElasticsearch >> Can't drop an Elasticsearch. Will drop all the indexes from this cluster instead.")
+        print("DatabaseElasticsearch >> Can't drop an Elasticsearch. Will drop all the indexes from this cluster instead.")
         raise NotImplementedError
 
 
@@ -188,9 +188,9 @@ class DatabaseElasticsearch(Database):
         
         try:
             response = self.es.delete_by_query(index=index_name, body=query)
-            print(f"NoSQLElasticsearch >> Successfully deleted date from '{index_name}'.")
+            print(f"DatabaseElasticsearch >> Successfully deleted date from '{index_name}'.")
         except Exception as e:
-            print(f"NoSQLElasticsearch >> Failed to delete data from '{index_name}': {e}")
+            print(f"DatabaseElasticsearch >> Failed to delete data from '{index_name}': {e}")
 
         return None
 
@@ -204,7 +204,7 @@ class DatabaseElasticsearch(Database):
         List the databases (clusters) present on an Elasticsearch DB server.
         """
         info = self.es.info()
-        print(f"NoSQLElasticsearch >> Cluster info: {info}")
+        print(f"DatabaseElasticsearch >> Cluster info: {info}")
         return info
     
 
@@ -228,11 +228,11 @@ class DatabaseElasticsearch(Database):
         if system_db:
             # built-in system indexes start with a dot
             indexes = [index['index'] for index in self.es.cat.indices(format='json')]
-            print(f"NoSQLElasticsearch >> Found indexes: {' | '.join(indexes)}")
+            print(f"DatabaseElasticsearch >> Found indexes: {' | '.join(indexes)}")
             return indexes
         else:
             indexes = [index['index'] for index in self.es.cat.indices(format='json') if not index['index'].startswith(".")]
-            print(f"NoSQLElasticsearch >> Found indexes: {' | '.join(indexes)}")
+            print(f"DatabaseElasticsearch >> Found indexes: {' | '.join(indexes)}")
             return indexes
         
         return None
@@ -276,10 +276,10 @@ class DatabaseElasticsearch(Database):
         #     response = self.es.index(index=index_name, document=action["_source"], id=action["_id"])
         #     print(response)
 
-        print(f"NoSQLElasticsearch >> Sending {len(actions)} documents into index '{index_name}'.")
+        print(f"DatabaseElasticsearch >> Sending {len(actions)} documents into index '{index_name}'.")
         response = helpers.bulk(self.es, actions, raise_on_error =True)
         if response[1]:
-            print(f"NoSQLElasticsearch >> API error when sending documents: {response}")
+            print(f"DatabaseElasticsearch >> API error when sending documents: {response}")
 
         return None
 
@@ -360,7 +360,7 @@ class DatabaseElasticsearch(Database):
         try:
             for doc in helpers.scan(self.es, index=index_name, query=query, size=1000):
                 documents.append(doc)
-            print(f"NoSQLElasticsearch >> Field search found {len(documents)} matching documents.")
+            print(f"DatabaseElasticsearch >> Field search found {len(documents)} matching documents.")
         except NotFoundError as e:
             print(f"APIClientElastic >> Index '{e.info['error']['index']}' not found.")
             return []
@@ -425,7 +425,7 @@ class DatabaseElasticsearch(Database):
         try:
             response = self.es.search(index=index_name, body=query)
             documents = [hit for hit in response['hits']['hits']]
-            print(f"NoSQLElasticsearch >> Vector search found {len(documents)} matching documents.")
+            print(f"DatabaseElasticsearch >> Vector search found {len(documents)} matching documents.")
             return documents
         except Exception as e:
             print(f"APIClientElastic >> Error: An error occurred: {e}")

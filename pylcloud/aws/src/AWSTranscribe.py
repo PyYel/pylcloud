@@ -4,7 +4,7 @@ import os, sys
 import requests
 import time
 
-from aws import AWS
+from .AWS import AWS
 
 
 class AWSTranscribe(AWS):

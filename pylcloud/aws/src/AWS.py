@@ -4,10 +4,6 @@ import shutil
 
 from abc import ABC
 
-AWS_DIR_PATH = os.path.dirname(os.path.dirname(__file__))
-if __name__ == "__main__":
-    sys.path.append(os.path.dirname(AWS_DIR_PATH))
-
 
 class AWS(ABC):
     """

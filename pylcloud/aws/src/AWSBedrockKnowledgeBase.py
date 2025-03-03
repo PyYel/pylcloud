@@ -3,11 +3,8 @@ import json
 import os, sys
 import uuid
 
-AWS_DIR_PATH = os.path.dirname(os.path.dirname(__file__))
-if __name__ == "__main__":
-    sys.path.append(os.path.dirname(AWS_DIR_PATH))
+from .AWS import AWS
 
-from aws import AWS
 
 class AWSBedrockKnowledgeBase(AWS):
     """
@@ -68,7 +65,7 @@ class AWSBedrockKnowledgeBase(AWS):
         """
 
         model_id = "amazon.titan-text-premier-v1:0"
-        model_arn = f'arn:aws:bedrock:us-east-1::foundation-model/{model_id}'
+        model_arn = f'arn:.AWS:bedrock:us-east-1::foundation-model/{model_id}'
 
         models = self.list_foundation_models()
         # print([model["modelId"] for model in models if model["modelId"].startswith("amazon")])

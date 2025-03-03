@@ -6,7 +6,7 @@ import sys
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from aws import AWS
+from .AWS import AWS
 
 
 class AWSS3(AWS):

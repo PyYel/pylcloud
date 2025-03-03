@@ -3,11 +3,7 @@ import boto3
 import json
 import uuid
 
-AWS_DIR_PATH = os.path.dirname(os.path.dirname(__file__))
-if __name__ == "__main__":
-    sys.path.append(os.path.dirname(AWS_DIR_PATH))
-
-from aws import AWS
+from .AWS import AWS
 
 
 class AWSBedrockModels(AWS):
