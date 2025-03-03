@@ -25,88 +25,81 @@ class NoSQL(ABC):
 
 
     @abstractmethod
-    def connect_database(self, 
-                         host: str = "127.0.0.1",
-                         user: str = "user",
-                         password: str = "password",
-                         database_name: str = "my_db",
-                         port: str = "3306",
-                         create_if_not_exists: bool = False):
+    def _connect_database(self, *args, **kwargs):
         """
-        Connects to the database and creates a connector object ``conn``. 
+        Connects to the database and creates a connector object. 
         """
         pass
-    
+
 
     @abstractmethod
-    def disconnect_database(self):
+    def _create_table(self, *args, **kwargs):
+        """
+        Creates a new index/collection.
+        """
+        pass
+
+
+    @abstractmethod    
+    def _delete_data(self, *args, **kwargs):
+        """
+        Deletes matching entries/records/documents from the DB.
+        """
+        pass
+
+
+    @abstractmethod
+    def _disconnect_database(self, *args, **kwargs):
         """
         Closes the database linked to the connector ``conn``.
         """
         pass
-    
+
 
     @abstractmethod
-    def list_databases(self, system_db: bool = False):
+    def _drop_database(self, *args, **kwargs):
         """
-        List the databases (schemas) present on a SQL server.
-        
-        Parameters
-        ----------
-        system_db: bool
-            Whereas returning the builtin databases if any, or not.
+        Drops the whole cluster (database).
         """
         pass
 
 
     @abstractmethod
-    def list_tables(self, database_name: str):
+    def _drop_table(self, *args, **kwargs):
         """
-        Lists all the tables present in a database (schemas).
-
-        Parameters
-        ----------
-        database_name: str
-            The name of the database (schema) to list tables from.
-
-        Notes
-        -----
-        - To list the existing databases, see ``list_databases()``.
+        Drops the matching indexes/collections on this cluster (database).
         """
         pass
 
 
     @abstractmethod
-    def create_table(self, **kwargs):
+    def _list_databases(self, *args, **kwargs):
         """
-        
+        Lists the cluster(s) and its metadata.
         """
         pass
     
 
     @abstractmethod
-    def drop_database(self, database_name: str):
+    def _list_tables(self, *args, **kwargs):
         """
-        
-        """
-        pass
-
-
-    @abstractmethod
-    def drop_table(self, table_name: str):
-        """
-        
+        Lists all the indexes/collections on this cluster (database).
         """
         pass
 
 
-    def _connect_database(self, 
-                          base_url: str = "127.0.0.1",
-                          username: str = "admin", 
-                          password: str = "password"
-                          ) -> None:
+    @abstractmethod    
+    def _query_data(self, *args, **kwargs):
         """
-        Connects to the Elasticsearch DB, and creates the ``es`` connector.
+        Retreives matching entries/records/documents from the DB.
+        """
+        pass
+
+
+    @abstractmethod    
+    def _send_data(self, *args, **kwargs):
+        """
+        Injects data into the DB by creating new entry/record/document.
         """
         pass
 
@@ -130,7 +123,7 @@ class NoSQL(ABC):
 
         Examples
         --------
-        >>> print(_hash_content(content='Message from Caroline: Merry Christmast!', prefixes=['2024/12/25', '103010']))
+        >>> print(_hash_content(content='Message from Caroline: Merry Christmas!', prefixes=['2024/12/25', '103010']))
         >>> '2024/12/25-103010-4432e1c6d1c4f0db2f157d501ae242a7'
         """
         return f"{'-'.join(prefixes)}-{hashlib.md5(content.encode()).hexdigest()}"

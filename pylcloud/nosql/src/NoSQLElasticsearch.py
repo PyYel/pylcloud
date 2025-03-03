@@ -1,15 +1,14 @@
 import os, sys
 
-from datetime import datetime, timedelta
-import hashlib
-
 from elasticsearch import Elasticsearch, helpers, NotFoundError
 import ssl
 import json
 import ssl
-from sympy import use
 import urllib3
- 
+import warnings
+
+# Removes unverified HTTPS SSL traffic warnings
+warnings.filterwarnings('ignore', 'Connecting to .+ using TLS with verify_certs=False is insecure')
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 from nosql import NoSQL
@@ -19,7 +18,7 @@ class NoSQLElasticsearch(NoSQL):
     """
     Elasticsearch Python API helper.
     """
-    def __init__(self, host: str = "http://localhost:9200", user: str = "admin", password: str = "password"):
+    def __init__(self, host: str = "https://localhost:9200", user: str = "admin", password: str = "password"):
         """
         Initializes a connection to an Elasticsearch cluster.
 
@@ -41,7 +40,7 @@ class NoSQLElasticsearch(NoSQL):
             - Fields are similar to columns (although they may be nested). 
         - Similarly to a MySQL server, the PyYel library flattens the connection layers. This means, when connecting
         to an Elasticsearch DB, you are directly connected to the cluster. To change of cluster, you should 'reconnect' to the server.
-        In the Elasticsearch context, this is more trivial, as two clusters must always hosted on different ports.
+        In the Elasticsearch context, this is more obvious, as two clusters must always be hosted on different ports.
         """
         super().__init__()
 
@@ -52,8 +51,8 @@ class NoSQLElasticsearch(NoSQL):
         # TODO: Add connection certificate
         try:
             self.connect_database(host=host, user=user, password=password)
-        except:
-            print(f"NoSQLElasticsearch >> An error occured when conneccting to '{host}'.")
+        except Exception as e:
+            print(f"NoSQLElasticsearch >> An error occured when conneccting to '{host}': {e}")
 
         # Note:
         # The authentication credentials above are required to connect to Elasticsearch.
@@ -62,6 +61,10 @@ class NoSQLElasticsearch(NoSQL):
 
         return None
 
+
+    def _connect_database(self, *args, **kwargs):
+        """See ``connect_database()``."""
+        return self.connect_database(*args, **kwargs)
 
     def connect_database(self, 
                          host: str = "127.0.0.1",
@@ -74,29 +77,9 @@ class NoSQLElasticsearch(NoSQL):
         return self.es
     
 
-    def disconnect_database(self):
-        """
-        Closes the database linked to the connector ``conn``.
-        """
-        pass
-    
-
-    def list_databases(self, system_db: bool = False):
-        """
-        List the databases (clusters) present on an Elasticsearch DB server.
-        
-        Parameters
-        ----------
-        system_db: bool
-            Whereas returning the builtin databases if any, or not.
-        """
-        return self.es.info()
-
-
-    def create_table(self, **kwargs):
+    def _create_table(self, *args, **kwargs):
         """See ``create_index()``."""
-        return self.create_index(**kwargs)
-
+        return self.create_index(*args, **kwargs)
 
     def create_index(self, index_name: str, properties: dict[str], shards: int = 1, replicas: int = 1):
         """
@@ -137,267 +120,56 @@ class NoSQLElasticsearch(NoSQL):
         # Create the index
         if not self.es.indices.exists(index=index_name):
             self.es.indices.create(index=index_name, body=settings)
-            print(f"Index '{index_name}' created.")
+            print(f"NoSQLElasticsearch >> Index '{index_name}' created.")
         else:
-            print(f"Index '{index_name}' already exists.")    
+            print(f"NoSQLElasticsearch >> Index '{index_name}' already exists.")    
 
 
+    def _disconnect_database(self, *args, **kwargs):
+        """See ``disconnect_database()``."""
+        return self.disconnect_database(*args, **kwargs)
+    
+    def disconnect_database(self):
+        """
+        Closes the database linked to the connector ``conn``.
+        """
+        pass
+
+
+    def _drop_database(self, *args, **kwargs):
+        """See ``drop_database()``."""
+        return self.drop_database(*args, **kwargs)
+    
     def drop_database(self, database_name: str):
         """
         Drops all the indexes from a cluster.
         """
-        super().__init__()
+        print("NoSQLElasticsearch >> Can't drop an Elasticsearch. Will drop all the indexes from this cluster instead.")
+        raise NotImplementedError
 
 
-    def drop_table(self, table_name: str):
+    def _drop_table(self, table_name: str):
+        """See ``drop_index()``."""
+        return self.drop_index(index_name=table_name)
+    
+    def drop_index(self, index_name: str):
         """
         Deletes an index and all its content.
         """
         try:
-            response = self.es.indices.delete(index=table_name)
-            print(f"Elasticsearch >> Index '{table_name}' deleted successfully.")
+            response = self.es.indices.delete(index=index_name)
+            print(f"Elasticsearch >> Index '{index_name}' deleted successfully.")
         except Exception as e:
-            print(f"Elasticsearch >> Failed to delete index '{table_name}': {e}")
+            print(f"Elasticsearch >> Failed to delete index '{index_name}': {e}")
         
-        return True
-
-
-    def list_tables(self, database_name: str = None):
-        """
-        Returns a list of the non-builtin indexes names of the cluster.
-
-        Parameters
-        ----------
-        database_name: str
-            The name of the database (schema) to list tables from.
-
-        Notes
-        -----
-        - To list the existing databases, see ``list_databases()``.
-        """
-        return [index['index'] for index in self.es.cat.indices(format='json') if not index['index'].startswith(".")]
-
-
-    def send_to_elastic(self, logs: dict[str], labels: dict[dict[str]], levels: dict[str] = "N/A", index_names: list[str] = ["test"]):
-        """
-        Sends to the Elasticsearch DB.
-
-        TODO: Add certificate to the connection (cf. __init__())
-
-        TODO: some levels may be infered during preprocessing, so ``levels`` should be a dictionnary 
-        of {timestamp: level}, just like ``logs`` ({timestamp: message}).
-
-        Parameters
-        ----------
-        logs: dict[str]
-            The logs where the key:value pairs are of format timestamp:content.
-        labels: dict[dict[str]]
-            The labels (metadatas) where the key:value pairs are of format timestamp:{label:value}
-        levels: str, 'N/A'
-            The log.level default value.
-        index_names: list[str], ['test']
-            The names of the indexes which should receive the logs data. If multiple indexes are specified,
-            the records are duplicated are duplicated across all the indexes.
-
-        Examples
-        --------
-        >>> logs = {"2024-10-30T08:19:19.9070573Z": "Current runner version: '2.317.0'", 
-                    "2024-10-25T09:36:09.0391254Z": "Runner name: 'GH-UBU22-RE-1'"}
-        >>> labels = {"2024-10-30T08:19:19.9070573Z": {"step": "Complete job", "run": "2634763"},
-                      "2024-10-25T09:36:09.0391254Z": {"step": "Post Checkout PR branch and all PR commits", "run": "2634763"}}
-        >>> index_name = "test" # If str, will be promotted to list(str)
-        """
-
-        if type(index_names) is str: index_names = [index_names]
-
-        logs = [
-            {
-                "@timestamp": timestamp,
-                "log": {
-                    "level": levels, # TODO: replace with levels[timestamps] = LEVEL
-                    "message": content
-                },
-                "metadata": labels[timestamp]
-            }
-            for timestamp, content in logs.items()
-        ]
-        
-        index_names = [index_name.lower() for index_name in index_names]
-        for index_name in index_names:
-            # Every team has its index, so some logs must be duplicated across multiple teams
-            actions = [
-                {
-                    "_index": index_name,                   # Target indexes
-                    "_id": self._hash_content(content=log),         # Hashed id for log unicity
-                    "_source": log                          # Document content
-                }
-                for log in logs
-            ]
-
-            response = helpers.bulk(self.es, actions)
-            if response[1]:
-                print(f"Errors: {response[1]}")
-            break # Only the first team
-        
-        return True
-
-
-    def retrieve_from_elastic(self, 
-                              index_name: str, 
-                              must_pairs: list[dict[str]] = [], 
-                              should_pairs: list[dict[str]] = [], 
-                              start_time: str = None, 
-                              end_time: str = None,
-                              days_delta: float = 1.0):
-        """
-        Retrieves data from the Elasticsearch DB.
-
-        Parameters
-        ----------
-        index_name: str
-            The name of the index to query.
-        must_pairs: list[dict[str]]
-            A list of ALL the label-value pairs that a record must match to be selected. Must be Elasticsearch keywords fields.
-        should_pairs: list[dict[str]]
-            A list of AT LEAST ONE label-value pair that a record must match to be selected. Must be Elasticsearch keywords fields.
-        start_time: str
-            The start of the timestamp range. Date should be of truncated format ``%Y-%m-%d %H:%M:%S``.
-        end_time: str
-            The end of the timestamp range. Date should be of truncated format ``%Y-%m-%d %H:%M:%S``. If ``None``, the current time will be used.
-        days_delta: float, 1.0
-            In the event of a missing ``start_time``, it will be replaced with the date ``days_delta`` from now.
-
-        Returns
-        -------
-        documents: list[dict[str]]
-            The list of fetched document, as dictionnaries nested with the same structure as the one found in Elasticsearch.
-        
-        Examples
-        --------
-        >>> index_name = "test_repository"
-        >>> start_time = "2024-10-25 10" # Will replace the missing values with :00:00
-        >>> end_time = "2024-10" # Will replace the missing values with :01 00:00:00
-        # A list of single key-value pairs. This will retreive any log tagged as 'Error' or 'Warning'. The '.keyword' MUST be used for Elasticsearch to find the records.
-        >>> should_pairs = [{'log.level.keyword': 'Error'}, {'log.level.keyword': 'Warning'}] 
-        # When calling the method, it will return a list of documents with the following structure:
-        >>> retreive_from_elastic(...)
-        >>> [
-                {
-                    '_index': '...', 
-                    '_id':'...', 
-                    '@timestamp': '...',
-                    '_source': { 
-                        'log': {
-                            'message': ..., # eg: 'Cleanup process'
-                            'level': ... # eg: 'Info'
-                        }, 
-                        'metadata': {
-                            ... # eg: 'repo_owner': 'PowerLogic-Toolsuite
-                        }
-                    }
-                }, ...
-            ]
-        """
-
-        if start_time is None: start_time = datetime.now() - timedelta(days=days_delta)
-        else: 
-            start_time = self.convert_to_datetime(start_time)
-            # Free Loki Grafana limits querries to 30 days from now # TODO: DEFAULT LOKI CONFIG IS 7DAYS
-            oldest_start_time = datetime.now() - timedelta(days=30)
-            if start_time < oldest_start_time:
-                print(f"APIClientElastic >> Can't querry logs that are older than 30 days from now: {start_time}. Querry date changed from {oldest_start_time} to now.")
-                start_time = oldest_start_time
-            # Start date must be older than end date
-            if end_time is not None:
-                if self.convert_to_datetime(end_time) < start_time:
-                    print(f"APIClientElastic >> Can't querry logs when the starting date is ulterior to the ending date: {end_time} < {start_time}. Querry aborted.")
-                    return []
-
-        if end_time is None: end_time = datetime.now()
-        else: 
-            end_time = self.convert_to_datetime(end_time)
-            # End date can't be in the future (would easily break the querry range of 1 month)
-            if end_time > datetime.now(): end_time = datetime.now()
-
-        must_conditions = [
-            {
-                "range": {
-                    "@timestamp": {
-                        "gte": start_time,
-                        "lte": end_time
-                    }
-                }
-            }
-        ]
-        for must_pair in must_pairs:
-            must_conditions.append({"term": must_pair})
-
-        should_conditions = []
-        for should_pair in should_pairs:
-            should_conditions.append({"term": should_pair})
-
-        query = {
-            "query": {
-                "bool": {
-                    "must": must_conditions,
-                    "should": should_conditions,
-                    # At least 1 should condition must be matched. When there is no should condition input, the minimum must be set to zero
-                    "minimum_should_match": 1 if should_conditions else 0
-                }
-            },
-            "sort": [
-                {"@timestamp": "asc"}
-            ],
-            "size": 10000  # Adjust the size as needed
-        }
-
-        # Execute the initial search query
-        try:
-            response = self.es.search(index=index_name, body=query)
-            documents: list = response['hits']['hits']
-        except NotFoundError as e:
-            print(f"APIClientElastic >> Warning: Index not found: {e.info['error']['index']}")
-            return []
-        except Exception as e:
-            print(f"APIClientElastic >> Error: An error occurred: {e}")
-            return []
-
-        # Retrieve all the documents using search_after
-        while len(response['hits']['hits']) > 0:
-            last_hit = response['hits']['hits'][-1]
-            search_after = last_hit['sort']
-
-            query['search_after'] = search_after
-            response = self.es.search(index=index_name, body=query)
-            documents.extend(response['hits']['hits'])
-
-        return documents
+        return None
     
 
-    def update_documents(self, documents: list[str]):
-        """
-        Updates inplace a list of documents with its new content. The documents must at least feature the ``_index``, ``_id``, 
-        and ``_source`` fields.
-
-        This is useful when 
-        """
-
-        actions = [
-            {
-                "_op_type": "index",  # Use "index" to create or replace the document
-                "_index": doc['_index'],
-                "_id": doc['_id'],
-                "_source": doc['_source']
-            }
-            for doc in documents
-        ]
-
-        response = helpers.bulk(self.es, actions)
-        if response[1]:
-            print(f"Errors: {response[1]}")
-
-
-    def delete_where(self, index: str, pairs: dict[str] = {}):
+    def _delete_data(self, *args, **kwargs):
+        """See ``delete_data()``."""
+        return self.delete_data(*args, **kwargs)
+    
+    def delete_data(self, index_name: str, pairs: dict[str] = {}):
         """
         Deletes all the records from an index that match the ``pairs`` conditions.
 
@@ -414,24 +186,248 @@ class NoSQLElasticsearch(NoSQL):
         else:
             query = {"query": {"match": pairs}}
         
-        # Delete documents matching the query
-        response = self.es.delete_by_query(index=index, body=query)
-        print("Delete response:", response)
+        try:
+            response = self.es.delete_by_query(index=index_name, body=query)
+            print(f"NoSQLElasticsearch >> Successfully deleted date from '{index_name}'.")
+        except Exception as e:
+            print(f"NoSQLElasticsearch >> Failed to delete data from '{index_name}': {e}")
 
-        return True
+        return None
 
 
-    def delete_index(self, index: str):
+    def _list_databases(self, *args, **kwargs):
+        """See ``list_clusters()``."""
+        return self.list_clusters(*args, **kwargs)
+    
+    def list_clusters(self):
+        """
+        List the databases (clusters) present on an Elasticsearch DB server.
+        """
+        info = self.es.info()
+        print(f"NoSQLElasticsearch >> Cluster info: {info}")
+        return info
+    
+
+    def _list_tables(self, *args, **kwargs):
+        """See ``list_indexes()``."""
+        return self.list_indexes(*args, **kwargs)
+
+    def list_indexes(self, system_db: bool = False):
+        """
+        Returns a list of the names of the indexes on the connected cluster.
+
+        Parameters
+        ----------
+        system_db: bool
+            Whereas returning the builtin databases if any, or not.
+
+        Notes
+        -----
+        - To list the existing databases, see ``list_databases()``.
+        """
+        if system_db:
+            # built-in system indexes start with a dot
+            indexes = [index['index'] for index in self.es.cat.indices(format='json')]
+            print(f"NoSQLElasticsearch >> Found indexes: {' | '.join(indexes)}")
+            return indexes
+        else:
+            indexes = [index['index'] for index in self.es.cat.indices(format='json') if not index['index'].startswith(".")]
+            print(f"NoSQLElasticsearch >> Found indexes: {' | '.join(indexes)}")
+            return indexes
+        
+        return None
+
+
+    def _send_data(self, *args, **kwargs):
+        """See ``send_data()``."""
+        return self.send_data(*args, **kwargs)
+
+
+    def send_data(self, index_name: str, documents: list[dict]):
+        """
+        Sends data to the Elasticsearch index. Can handle single files, multiple files, and directories.
+
+        Parameters
+        ----------
+        index_name: str
+            The name of the index to send data to.
+        workspace_name: str
+            The name of the workspace.
+        path: str
+            The list of preprocessed files to inject into Elastic. 
+
+        Notes
+        -----
+        - For a file_path of format ``path/to/file.ext``, the preprocessed data should be inside ``path/to/file`` eponymous folder/
+        """
+
+        if isinstance(files_paths, str): files_paths = [files_paths]
+
+        actions = [
+            {
+                "_index": index_name,                           # Target indexes
+                "_id": self._hash_content(document=document),   # Hashed id for log unicity
+                "_source": document                             # Document content
+            }
+            for document in documents
+        ]
+
+        # for action in actions:
+        #     response = self.es.index(index=index_name, document=action["_source"], id=action["_id"])
+        #     print(response)
+
+        print(f"NoSQLElasticsearch >> Sending {len(actions)} documents into index '{index_name}'.")
+        response = helpers.bulk(self.es, actions, raise_on_error =True)
+        if response[1]:
+            print(f"NoSQLElasticsearch >> API error when sending documents: {response}")
+
+        return None
+
+
+    def _query_data(self, *args, **kwargs):
+        """See ``query_data()``."""
+        return self.query_data(*args, **kwargs)
+
+    def query_data(self, 
+                   index_name: str, 
+                   must_pairs: list[dict[str]] = [], 
+                   should_pairs: list[dict[str]] = []):
+        """
+        Retrieves data from the Elasticsearch DB.
+
+        Parameters
+        ----------
+        index_name: str
+            The name of the index to query.
+        must_pairs: list[dict[str]]
+            A list of ALL the label-value pairs that a record must match to be selected. Must be Elasticsearch keywords fields.
+        should_pairs: list[dict[str]]
+            A list of AT LEAST ONE label-value pair that a record must match to be selected. Must be Elasticsearch keywords fields.
+
+        Returns
+        -------
+        documents: list[dict[str]]
+            The list of fetched document, as dictionnaries nested with the same structure as the one found in Elasticsearch.
+        
+        Notes
+        -----
+        - When performing full text search, field keys must be specified as 'keyword': [{'my_text_field.keyword': 'value'}].
+
+        Examples
+        --------
+        >>> index_name = "workspaces"
+        >>> should_pairs = [{'flat_field': 'at_least_one_must_match_this'}, ...] 
+        >>> must_pairs = [{'nested_field.key_1': 'all_must_match_this'}, ...] 
+        # When calling the method, it will return a list of documents with the following structure:
+        >>> retreive_from_elastic(...)
+        >>> [
+                {
+                    '_index': '...', 
+                    '_id':'...', 
+                    '@timestamp': '...',
+                    '_source': { 
+                        flat_field: '...',
+                        nested_field: {
+                            key_1: '...',
+                            ...
+                            }
+                        }
+                    }
+                }, ...
+            ]
+        """
+
+        must_conditions = []
+        for must_pair in must_pairs:
+            must_conditions.append({"term": must_pair})
+
+        should_conditions = []
+        for should_pair in should_pairs:
+            should_conditions.append({"term": should_pair})
+
+        query = {
+            "query": {
+                "bool": {
+                    "must": must_conditions,
+                    "should": should_conditions,
+                    # At least 1 should condition must be matched. When there is no should condition input, the minimum must be set to zero
+                    "minimum_should_match": 1 if should_conditions else 0
+                }
+            }
+        }
+
+        documents = []
+        try:
+            for doc in helpers.scan(self.es, index=index_name, query=query, size=1000):
+                documents.append(doc)
+            print(f"NoSQLElasticsearch >> Field search found {len(documents)} matching documents.")
+        except NotFoundError as e:
+            print(f"APIClientElastic >> Index '{e.info['error']['index']}' not found.")
+            return []
+        except Exception as e:
+            print(f"APIClientElastic >> An error occurred during semantic search: {e}")
+            return []
+
+        return documents
+
+
+    def similarity_search(self, index_name: str, 
+                          query_vector: list[float], 
+                          must_pairs: list[dict[str]] = [], 
+                          should_pairs: list[dict[str]] = [],
+                          k: int = 5):
+        """
+        Performs k-NN similarity search in Elasticsearch.
+
+        Parameters
+        ----------
+        index_name : str
+            The Elasticsearch index to search in.
+        query_vector : list
+            The vector representation of the input query.
+        k : int, optional
+            The number of closest matches to return (default is 5).
+
+        Returns
+        -------
+        list
+            A list of retrieved documents sorted by similarity.
+        """
+
+        must_conditions = []
+        for must_pair in must_pairs:
+            must_conditions.append({"term": must_pair})
+
+        should_conditions = []
+        for should_pair in should_pairs:
+            should_conditions.append({"term": should_pair})
+
+        query = {
+            "size": k,
+            "query": {
+                "bool": {
+                    # Additionnal condition are required to reduce the knn scope, such as limiting it to a specific workspace_name
+                    "must": must_conditions,
+                    "should": should_conditions,
+                    # At least 1 should condition must be matched. When there is no should condition input, the minimum must be set to zero
+                    "minimum_should_match": 1 if should_conditions else 0,
+                    "filter": {
+                        "knn": {
+                            "field": "chunk.vector",
+                            "query_vector": query_vector,
+                            "k": k,
+                        }
+                    }
+                }
+            }
+        }
 
         try:
-            response = self.es.indices.delete(index=index)
-            print(f"Index '{index}' deleted successfully.")
+            response = self.es.search(index=index_name, body=query)
+            documents = [hit for hit in response['hits']['hits']]
+            print(f"NoSQLElasticsearch >> Vector search found {len(documents)} matching documents.")
+            return documents
         except Exception as e:
-            print(f"Failed to delete index '{index}': {e}")
-        
-        return True
-
-    def list_indexes(self):
-        """Returns a list of the non-builtin indexes names."""
-        return [index['index'] for index in self.es.cat.indices(format='json') if not index['index'].startswith(".")]
+            print(f"APIClientElastic >> Error: An error occurred: {e}")
+            return []
 
