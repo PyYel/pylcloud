@@ -366,10 +366,10 @@ class DatabaseElasticsearch(Database):
                 documents.append(doc)
             print(f"DatabaseElasticsearch >> Field search found {len(documents)} matching documents.")
         except NotFoundError as e:
-            print(f"APIClientElastic >> Index '{e.info['error']['index']}' not found.")
+            print(f"DatabaseElasticsearch >> Index '{e.info['error']['index']}' not found.")
             return []
         except Exception as e:
-            print(f"APIClientElastic >> An error occurred during semantic search: {e}")
+            print(f"DatabaseElasticsearch >> An error occurred during semantic search: {e}")
             return []
 
         return documents
@@ -432,6 +432,6 @@ class DatabaseElasticsearch(Database):
             print(f"DatabaseElasticsearch >> Vector search found {len(documents)} matching documents.")
             return documents
         except Exception as e:
-            print(f"APIClientElastic >> Error: An error occurred: {e}")
+            print(f"DatabaseElasticsearch >> Error: An error occurred: {e}")
             return []
 
