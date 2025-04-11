@@ -161,3 +161,7 @@ cython_debug/
 
 .venv*
 *.db
+*.png
+*.pdf
+*.docx
+*.jpeg
