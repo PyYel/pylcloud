@@ -251,7 +251,7 @@ class AWSBedrockModels(AWS):
                         model_name: str, 
                         user_prompt: str, 
                         system_prompt: str = "", 
-                        files: list[BytesIO] = [], 
+                        files: List[Union[str, BytesIO]] = [], 
                         temperature: int = 1,
                         top_k: int = 250,
                         top_p: float = 0.999,
