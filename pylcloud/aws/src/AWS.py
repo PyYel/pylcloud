@@ -1,7 +1,7 @@
 import boto3
 import os, sys
 import shutil
-
+from typing import Optional, Union, List, Dict
 from abc import ABC
 
 
@@ -19,11 +19,11 @@ class AWS(ABC):
 
 
     def _create_client(self, 
-                       aws_service_name: str = None, 
-                       aws_access_key_id: str = None, 
-                       aws_secret_access_key: str = None, 
-                       aws_session_token: str = None,
-                       aws_region_name: str = 'us-east-1',
+                       aws_service_name: Optional[str] = None, 
+                       aws_access_key_id: Optional[str] = None, 
+                       aws_secret_access_key: Optional[str] = None, 
+                       aws_session_token: Optional[str] = None,
+                       aws_region_name: Optional[str] = 'eu-west-1',
                        **kwargs):
         """
         Initiates a connection to an AWS service. This is a low-level method, and should be used as part of a boto3 function.
@@ -38,7 +38,7 @@ class AWS(ABC):
             The user's private key to use to connect to the AWS services.
         aws_session_token: str, None
             The session token to use, if needed.
-        aws_region_name: str, 'us-east-1'
+        aws_region_name: str, 'eu-west-1'
             The AWS ressources region name.
 
         Returns
