@@ -1,0 +1,79 @@
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.1
+    container_name: es01
+    env_file:
+      - .env
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - ELASTIC_PASSWORD=${ELASTICSEARCH_ROOTPASSWORD}
+      - xpack.security.transport.ssl.enabled=false
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    networks:
+      - esnet
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.17.1
+    container_name: kibana
+    depends_on:
+      - elasticsearch
+    env_file:
+      - .env
+    ports:
+      - "5601:5601"
+    networks:
+      - esnet
+    environment:
+      - ELASTICSEARCH_HOST=${ELASTICSEARCH_HOST}
+      - ELASTICSEARCH_USER=elastic
+      - ELASTICSEARCH_PASSWORD=${ELASTICSEARCH_ROOTPASSWORD}
+
+  setup:
+    image: curlimages/curl:latest
+    container_name: setup
+    depends_on:
+      - elasticsearch
+    env_file:
+      - .env
+    environment:
+      - ELASTICSEARCH_USER=${ELASTICSEARCH_USER}
+      - ELASTICSEARCH_HOST=${ELASTICSEARCH_HOST}
+      - ELASTICSEARCH_PASSWORD=${ELASTICSEARCH_PASSWORD}
+      - ELASTICSEARCH_ROOTPASSWORD=${ELASTICSEARCH_ROOTPASSWORD}
+    entrypoint: >
+      sh -c '
+        until curl -ks -u elastic:${ELASTICSEARCH_ROOTPASSWORD} ${ELASTICSEARCH_HOST}/_security/_authenticate | grep -q username; do
+          echo "Waiting for Elasticsearch security API to be ready..." && sleep 5;
+        done
+
+        echo "Creating backend user...";
+        echo "================================================";
+        curl -ks -X POST -u elastic:${ELASTICSEARCH_ROOTPASSWORD} \
+          -H "Content-Type: application/json" \
+          "${ELASTICSEARCH_HOST}/_security/user/${ELASTICSEARCH_USER}" \
+          -d "{\"password\": \"${ELASTICSEARCH_PASSWORD}\", \"roles\": [\"superuser\"]}"
+        echo "Custom user created (if not already existing).";
+        echo "================================================";
+
+        echo "Default elastic password (from container logs):";
+        echo "================================================";
+        echo "Run the following to view it:";
+        echo "docker logs es01 2>&1 | grep -A 1 \"password for the elastic user\"";
+        echo "================================================";
+      '
+    networks:
+      - esnet
+
+volumes:
+  esdata:
+    driver: local
+
+networks:
+  esnet:
+    driver: bridge
