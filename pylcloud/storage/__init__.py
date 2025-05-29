@@ -1,10 +1,10 @@
 
 __all__ = [
     "StorageServer",
-    "StorageMiniIO",
+    "StorageMinIO",
     "StorageS3",
 ]
 
 from .src.StorageServer import StorageServer
-from .src.StorageMiniIO import StorageMiniIO
+from .src.StorageMinIO import StorageMinIO
 from .src.StorageS3 import StorageS3

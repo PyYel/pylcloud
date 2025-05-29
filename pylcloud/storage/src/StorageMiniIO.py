@@ -7,9 +7,9 @@ from concurrent.futures import ThreadPoolExecutor
 from .Storage import Storage
 
 
-class StorageMiniIO(Storage):
+class StorageMinIO(Storage):
     """
-    MiniIO helper.
+    MinIO helper.
     """
     def __init__(self,
                  bucket_name: str = "storage",
@@ -18,7 +18,7 @@ class StorageMiniIO(Storage):
                  secret_key="password",
                  region_name="eu-west-1"):
         """
-        MiniIO helper
+        MinIO helper
         """
         super().__init__(bucket_name=bucket_name)
 
