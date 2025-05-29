@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from abc import ABC, abstractmethod
 from typing import List, Dict, Optional, Union
 from pathlib import Path
-
+import mimetypes
 
 class Storage(ABC):
     """
@@ -26,6 +26,23 @@ class Storage(ABC):
             self.tmp_dir = tmp_dir
 
          # TODO: Add connection certificate
+
+        return None
+
+
+    def _init_mimetypes(self):
+
+        # Initialize mimetypes
+        mimetypes.init()
+
+        # Add specific mappings that might be missing
+        mimetypes.add_type('text/html', '.html')
+        mimetypes.add_type('text/css', '.css')
+        mimetypes.add_type('application/javascript', '.js')
+        mimetypes.add_type('application/json', '.json')
+        mimetypes.add_type('image/svg+xml', '.svg')
+        mimetypes.add_type('application/rdf+xml', '.owl')
+        mimetypes.add_type('text/turtle', '.ttl')
 
         return None
 
@@ -146,4 +163,3 @@ class Storage(ABC):
             return f"{'-'.join(prefixes)}-{hashlib.md5(content.encode()).hexdigest()}"
         else:
             return hashlib.md5(content.encode()).hexdigest()
-

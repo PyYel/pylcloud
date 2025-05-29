@@ -17,7 +17,7 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(AWS_DIR_PAT
 
 # # Test import and init
 
-api_bedrock = AWSBedrockModels(os.getenv("AWS_KEY_ID"), os.getenv("AWS_KEY_ACCESS"), aws_region_name="eu-west-1")
+api_bedrock = AWSBedrockModels(os.getenv("AWS_ACCESS_KEY_ID"), os.getenv("AWS_ACCESS_KEY_SECRET"), aws_region_name="eu-west-1")
 
 
 response = api_bedrock.return_query(model_name="claude-3.5-sonnet",

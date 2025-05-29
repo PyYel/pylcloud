@@ -74,9 +74,9 @@ class AWS(ABC):
             A list of extensions of files to exclude from deletion. Will only be used if include is empty. 
         """
 
-        if type(include) is str:
+        if isinstance(include, str):
             include = [include]
-        if type(exclude) is str:
+        if isinstance(exclude, str):
             exclude = [exclude]
 
         # Corrects the missing '.' in from of the extension
