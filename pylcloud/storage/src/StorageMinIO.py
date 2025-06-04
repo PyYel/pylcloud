@@ -123,3 +123,7 @@ class StorageMinIO(Storage):
         except Exception as e:
             print(f"list failed: {e}")
             return []
+
+
+    def upload_directory(self, path: str):
+        raise NotImplementedError

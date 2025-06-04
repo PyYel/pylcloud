@@ -38,3 +38,7 @@ class StorageServer(Storage):
         >>> bucket_api = AWSS3(KEY_ID, KEY, 'eu-west-1', 'my_bucket_name', 'C:/Users/Me/myapp/output_folder')
         """
         super().__init__(bucket_name=bucket_name, tmp_dir=tmp_dir)
+
+
+    def upload_directory(self, path: str):
+        raise NotImplementedError

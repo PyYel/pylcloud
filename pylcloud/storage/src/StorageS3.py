@@ -60,12 +60,17 @@ class StorageS3(Storage):
             os.mkdir(self.tmp_dir)
             print(f"StorageS3 >> Temporary folder created: '{self.tmp_dir}'")
 
-        self._init_mimetypes()
-
         return None
 
 
-    def ensure_keys(self, keys: Union[str, list[str]]):
+    def create_bucket(self):
+        """
+        Creates the chosen bucket if it does not exist.
+        """
+        raise NotImplementedError
+
+
+    def ensure_files(self, keys: Union[str, list[str]]):
         """
         Checks if the cloud keys exist and returns a dictionnary of the results, 
         where keys are the cloud keys, and the values are booleans.
@@ -106,6 +111,7 @@ class StorageS3(Storage):
                     except Exception as e:
                         failures += 1
                     pbar.update(1)
+
         if failures:
             print(f"StorageS3 >> Failed to verify the existence of {failures}/{len(keys)} keys.")
 
@@ -229,7 +235,7 @@ class StorageS3(Storage):
         return failed_files
 
 
-    def list_keys(self, prefix: str = ""):
+    def list_files(self, prefix: str = ""):
         """
         Returns a list of all the files present in a bucket whose key starts with ``key``.
 
@@ -258,7 +264,7 @@ class StorageS3(Storage):
         return file_list
 
 
-    def delete_keys(self, keys: Union[str, list[str]]):
+    def delete_files(self, keys: Union[str, list[str]]):
         """
         Deletes from the bucket the files specified in keys, 
         and returns the list of the successfully deleted files
@@ -270,7 +276,7 @@ class StorageS3(Storage):
         """
 
         if isinstance(keys, str):
-            if self.ensure_keys(keys=keys):
+            if self.ensure_files(keys=keys):
                 self.s3_client.delete_object(Bucket=self.bucket_name, Key=keys)
                 print("StorageS3 >> Key deleted successfully.")
             else:
@@ -302,7 +308,7 @@ class StorageS3(Storage):
         return None        
 
 
-    def edit_key(self, original_key: str, new_key: str, replace: bool = True):
+    def edit_file(self, original_key: str, new_key: str, replace: bool = True):
         """
         Moves, renames, or copy-pastes a key, by editing its cloud path.
 
@@ -390,10 +396,12 @@ class StorageS3(Storage):
 
             with tqdm(total=len(upload_tasks), disable=not display) as progress_bar:
                 for future in as_completed(future_to_idx):
-                    # Update progress bar as each task completes
-                    progress_bar.update(1)    
+                    progress_bar.update(1)
 
-    def upload_directory(self, local_dir: str, s3_prefix: str = "") -> None:
+        return None
+     
+
+    def upload_directory(self, path: str, prefix: str = "") -> None:
         """
         Uploads an entire local directory to AWS S3, preserving the directory structure
         and setting appropriate content types based on file extensions.
@@ -406,23 +414,23 @@ class StorageS3(Storage):
             None
         """
 
-        local_dir = os.path.normpath(local_dir)
+        path = os.path.normpath(path)
 
         all_files = []
         all_keys = []
         all_content_types = []
-        for root, _, files in os.walk(local_dir):
+        for root, _, files in os.walk(path):
             for file in files:
                 # Get the full local path
                 local_path = os.path.join(root, file)
 
                 # Calculate the S3 key by preserving directory structure
                 # Remove the base directory and convert to S3 path format
-                rel_path = os.path.relpath(local_path, local_dir)
-                s3_key = os.path.join(s3_prefix, rel_path).replace("\\", "/")
+                rel_path = os.path.relpath(path, path)
+                s3_key = os.path.join(prefix, rel_path).replace("\\", "/")
 
                 # Determine content type based on file extension
-                content_type, _ = mimetypes.guess_type(local_path)
+                content_type, _ = mimetypes.guess_type(path)
                 if content_type is None:
                     # Default to binary if we can't determine the type
                     content_type = 'application/octet-stream'
@@ -431,9 +439,8 @@ class StorageS3(Storage):
                 all_keys.append(s3_key)
                 all_content_types.append(content_type)
 
-        print(f"StorageS3 >> Found {len(all_files)} files to upload from '{local_dir}'.")
+        print(f"StorageS3 >> Found {len(all_files)} files to upload from '{path}'.")
         self.upload_files(keys=all_keys, paths=all_files, content_types=all_content_types)
         print(f"StorageS3 >> Directory upload complete")
 
         return None
-

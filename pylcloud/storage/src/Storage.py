@@ -26,6 +26,8 @@ class Storage(ABC):
 
          # TODO: Add connection certificate
 
+        self._init_mimetypes()
+
         return None
 
 
@@ -82,6 +84,23 @@ class Storage(ABC):
     def list_files(self, key: Optional[str]):
         """
         Lists files from remote storage, starting down to the root (or from the key) up to the leaves.
+        """
+        raise NotImplementedError
+
+
+    @abstractmethod
+    def upload_directory(self, path: str, key: Optional[str] = None) -> None:
+        """
+        Uploads an entire local directory to remote storage, while preserving its structure 
+        and setting appropriate content types based on file extensions.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def download_directory(self, key: str, path: Optional[str] = None) -> None:
+        """
+        Uploads an entire local directory to remote storage, while preserving its structure 
+        and setting appropriate content types based on file extensions.
         """
         raise NotImplementedError
 
