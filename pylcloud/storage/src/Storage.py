@@ -1,8 +1,7 @@
 import os, sys
 import hashlib
-from pydantic import BaseModel 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Optional, Union
+from typing import Optional, Union
 from pathlib import Path
 import mimetypes
 
@@ -56,7 +55,7 @@ class Storage(ABC):
     
 
     @abstractmethod
-    def upload_files(self, paths: Union[str, List[str]], keys: Optional[Union[str, List[str]]]):
+    def upload_files(self, paths: Union[str, list[str]], keys: Optional[Union[str, list[str]]]):
         """
         Uploads files to the remote storage.
         """
@@ -64,7 +63,7 @@ class Storage(ABC):
 
 
     @abstractmethod
-    def download_files(self, keys: Union[str, List[str]], paths: Optional[Union[str, List[str]]]):
+    def download_files(self, keys: Union[str, list[str]], paths: Optional[Union[str, list[str]]]):
         """
         Downloads files from the remote storage.
         """
@@ -72,7 +71,7 @@ class Storage(ABC):
 
 
     @abstractmethod
-    def delete_files(self, keys: Union[str, List[str]]):
+    def delete_files(self, keys: Union[str, list[str]]):
         """
         Deletes files from the remote storage.
         """
@@ -87,7 +86,7 @@ class Storage(ABC):
         raise NotImplementedError
 
 
-    def _check_args(self, keys: Optional[Union[str, List[str]]], paths: Optional[Union[str, List[str]]]):
+    def _check_args(self, keys: Optional[Union[str, list[str]]], paths: Optional[Union[str, list[str]]]):
         """
         
         """
@@ -107,7 +106,7 @@ class Storage(ABC):
         
         return keys, paths
 
-    def _normalize_paths(self, absolute_paths: Union[str, List[str]]) -> List[str]:
+    def _normalize_paths(self, absolute_paths: Union[str, list[str]]) -> list[str]:
         """
         Normalize a list of file absolute paths by removing platform-specific parts
         like drive letters and home directories, and converting to POSIX-style paths.
@@ -136,7 +135,7 @@ class Storage(ABC):
         return normalized_paths
 
 
-    def _hash_content(self, content: str, prefixes: List[str] = []):
+    def _hash_content(self, content: str, prefixes: list[str] = []):
         """
         Hashes a document content into a unique id of format <prefixes>-<hashed_content>. This is usefull to automatically overwrite 
         a stored document when a document with the same timestamp and content is written into Elasticsearch. 

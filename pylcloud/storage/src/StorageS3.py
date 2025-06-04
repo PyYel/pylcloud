@@ -1,6 +1,4 @@
-from fastapi import FastAPI, File, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
-from typing import List, Union, Optional
+from typing import Union, Optional
 import os
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -8,7 +6,6 @@ import boto3
 import mimetypes
 
 from .Storage import Storage
-from aws import AWS
 
 
 class StorageS3(Storage):
@@ -342,45 +339,59 @@ class StorageS3(Storage):
         return None
 
 
-    def upload_files(self, keys: list, paths: list, content_types: Optional[List] = None) -> None:
+    def upload_files(self, 
+                     keys: Union[str, list[str]], 
+                     paths: Union[str, list[str]], 
+                     content_types: Optional[list] = None, 
+                     display: bool = True) -> None:
         """
-        Uploads multiple files to S3 with specified content types.
+        Uploads multiple files to S3 with specified content types using parallel processing.
 
         Args:
-            keys (list): List of S3 keys (destination paths)
-            paths (list): List of local file paths to upload
-            content_types (list): List of content types for each file
+            keys (list): list of S3 keys (destination paths)
+            paths (list): list of local file paths to upload
+            content_types (list): list of content types for each file
 
         Returns:
             None
         """
 
-        def _upload_file(key: str, path: str, ExtraArgs: dict = {}):
+        def _upload_file(key: str, path: str, content_type: str):
             """
             Uploads a local file (path) into its cloud location (key).
             """
             if not os.path.exists(path):
                 print(f"StorageS3 >> Local file '{path}' does not exist. Check the path argument.")
+                return False
 
-            self.s3_client.upload_file(Bucket=self.bucket_name, 
-                                    Key=key,
-                                    Filename=path,
-                                    ExtraArgs=ExtraArgs)
-            return None
-
-        if content_types is None:
-            content_types = ['application/octet-stream']*len(paths)
-
-        if len(keys) != len(paths) or len(keys) != len(content_types):
-            raise ValueError("The lists of keys, paths, and content_types must have the same length")
-
-        for key, path, content_type in tqdm((keys, paths, content_types), total=len(keys)):
             try:
-                _upload_file(key=key, path=path, ExtraArgs={'ContentType': content_type})
-
+                self.s3_client.upload_file(
+                    Bucket=self.bucket_name, 
+                    Key=key,
+                    Filename=path,
+                    ExtraArgs={'ContentType': content_type}
+                )
+                return True
             except Exception as e:
                 print(f"StorageS3 >> Error uploading {path} to {key}: {str(e)}")
-    
+                return False
+
+        if content_types is None:
+            content_types = ['application/octet-stream'] * len(paths)
+
+        if len(keys) != len(paths) or len(keys) != len(content_types):
+            raise ValueError(f"StorageS3 >> The lists of keys, paths, and content_types must have the same length.")
+
+        upload_tasks = list(zip(keys, paths, content_types))
+        with ThreadPoolExecutor(max_workers=os.cpu_count()*2) as executor:
+
+            future_to_idx = {executor.submit(_upload_file, key, path, content_type): i 
+                            for i, (key, path, content_type) in enumerate(upload_tasks)}
+
+            with tqdm(total=len(upload_tasks), disable=not display) as progress_bar:
+                for future in as_completed(future_to_idx):
+                    # Update progress bar as each task completes
+                    progress_bar.update(1)    
 
     def upload_directory(self, local_dir: str, s3_prefix: str = "") -> None:
         """

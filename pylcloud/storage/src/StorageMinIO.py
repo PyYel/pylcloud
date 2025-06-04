@@ -1,11 +1,9 @@
-from fastapi import FastAPI, File, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
-from typing import List, Optional, Union
+from typing import Optional, Union
 import os
 import boto3
 from concurrent.futures import ThreadPoolExecutor
-from .Storage import Storage
 
+from .Storage import Storage
 
 class StorageMinIO(Storage):
     """
@@ -44,7 +42,7 @@ class StorageMinIO(Storage):
             print(f"Create bucket failed: {e}")
 
 
-    def upload_files(self, paths: Union[str, List[str]], keys: Optional[Union[str, List[str]]] = None):
+    def upload_files(self, paths: Union[str, list[str]], keys: Optional[Union[str, list[str]]] = None):
         """
         Uploads files to the remote storage.
         """
@@ -68,7 +66,7 @@ class StorageMinIO(Storage):
                 executor.submit(_upload_file, path, key)
 
 
-    def download_files(self, keys: Union[str, List[str]], paths: Optional[Union[str, List[str]]]):
+    def download_files(self, keys: Union[str, list[str]], paths: Optional[Union[str, list[str]]]):
         """
         Downloads files from the remote storage.
         """
@@ -92,7 +90,7 @@ class StorageMinIO(Storage):
                 executor.submit(_download_file, key, path)
 
 
-    def delete_files(self, keys: Union[str, List[str]]):
+    def delete_files(self, keys: Union[str, list[str]]):
         """
         Deletes files from the remote storage.
         """
@@ -123,5 +121,5 @@ class StorageMinIO(Storage):
                 response = self.s3_client.list_objects_v2(Bucket=self.bucket_name)
             return [item['Key'] for item in response.get('Contents', [])]
         except Exception as e:
-            print(f"List failed: {e}")
+            print(f"list failed: {e}")
             return []

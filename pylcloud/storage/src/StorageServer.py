@@ -1,14 +1,8 @@
-from fastapi import FastAPI, File, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
-from typing import List, Union, Optional
+from typing import Union, Optional
 import os
-from tqdm import tqdm
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import boto3
 
 
 from .Storage import Storage
-from aws import AWS
 
 
 class StorageServer(Storage):
