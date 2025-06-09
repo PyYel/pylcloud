@@ -1,4 +1,5 @@
 import os, sys
+from typing import Union, Optional
 
 
 from .Database import Database
@@ -29,22 +30,22 @@ class DatabaseMongoDB(Database):
         pass
     
 
-    def _create_table(self, *args, **kwargs):
+    def create_table(self, *args, **kwargs):
         """See ``create_index()``."""
         return self.create_index(*args, **kwargs)
 
 
-    def _create_index(self):
+    def create_index(self):
         pass
 
-    def _disconnect_database(self):
+    def disconnect_database(self):
         """
         Closes the database linked to the connector ``conn``.
         """
         pass
 
 
-    def _drop_database(self, database_name: str):
+    def drop_database(self, database_name: str):
         """
         Drops all the indexes from a cluster.
         """
@@ -55,29 +56,31 @@ class DatabaseMongoDB(Database):
     def drop_collection(self, collection_name: str):
         pass
 
-    def _drop_table(self, table_name: str):
+    def drop_table(self, table_name: str):
+        """See ``drop_collection()``."""
         self.drop_collection(collection_name=table_name)
 
-    def _delete_data(self, index: str, pairs: dict[str] = {}):
+    def delete_data(self, index: str, pairs: dict[str, str] = {}):
         pass
 
-    def _list_databases(self, system_db: bool = False):
+    def list_databases(self, system_db: bool = False):
         pass
     
 
     def list_collections(self, system_db: bool = False):
         pass
     
-    def _list_tables(self, database_name: str = None):
+    def list_tables(self, database_name: Optional[str] = None):
+        """See ``list_collections()``."""
         self.list_collections()
 
 
-    def _send_data(self, index_name: str, documents: list[dict]):
+    def send_data(self, index_name: str, documents: list[dict]):
         pass
 
 
-    def _query_data(self, 
+    def query_data(self, 
                    index_name: str, 
-                   must_pairs: list[dict[str]] = [], 
-                   should_pairs: list[dict[str]] = []):
+                   must_pairs: list[dict[str, str]] = [], 
+                   should_pairs: list[dict[str, str]] = []):
         pass

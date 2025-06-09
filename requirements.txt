@@ -4,6 +4,7 @@ tqdm
 elasticsearch
 fastapi
 uvicorn
+psycopg2
 
 # For testing
 python-dotenv==1.0.1

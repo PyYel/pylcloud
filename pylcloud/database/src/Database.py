@@ -25,11 +25,27 @@ class Database(ABC):
 
 
     @abstractmethod
-    def _connect_database(self, *args, **kwargs):
+    def connect_database(self, *args, **kwargs):
         """
         Connects to the database and creates a connector object. 
         """
         pass
+
+
+    @abstractmethod
+    def commit_transactions(self):
+        """
+        Commits the transactions operated since the last commit.
+        """
+        raise NotImplementedError
+
+
+    @abstractmethod
+    def rollback_transactions(self):
+        """
+        roolbacks the transactions operated since the last commit.
+        """
+        raise NotImplementedError
 
 
     @abstractmethod
@@ -41,7 +57,23 @@ class Database(ABC):
 
 
     @abstractmethod    
-    def _delete_data(self, *args, **kwargs):
+    def send_data(self, *args, **kwargs):
+        """
+        Deletes matching entries/records/documents from the DB.
+        """
+        pass
+
+
+    @abstractmethod    
+    def query_data(self, *args, **kwargs):
+        """
+        Retreives matching entries/records/documents from the DB.
+        """
+        pass
+
+
+    @abstractmethod    
+    def delete_data(self, *args, **kwargs):
         """
         Deletes matching entries/records/documents from the DB.
         """
@@ -49,7 +81,7 @@ class Database(ABC):
 
 
     @abstractmethod
-    def _disconnect_database(self, *args, **kwargs):
+    def disconnect_database(self, *args, **kwargs):
         """
         Closes the database linked to the connector ``conn``.
         """
@@ -57,31 +89,16 @@ class Database(ABC):
 
 
     @abstractmethod
-    def _drop_database(self, *args, **kwargs):
-        """
-        Drops the whole cluster (database).
-        """
-        pass
-
-
-    @abstractmethod
-    def _drop_table(self, *args, **kwargs):
+    def drop_table(self, *args, **kwargs):
         """
         Drops the matching indexes/collections on this cluster (database).
         """
         pass
 
-
-    @abstractmethod
-    def _list_databases(self, *args, **kwargs):
-        """
-        Lists the cluster(s) and its metadata.
-        """
-        pass
     
 
     @abstractmethod
-    def _list_tables(self, *args, **kwargs):
+    def list_tables(self, *args, **kwargs):
         """
         Lists all the indexes/collections on this cluster (database).
         """

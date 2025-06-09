@@ -1,7 +1,7 @@
 import os, sys
 import mysql.connector
 import json
-
+from typing import Union, Optional
 from mysql.connector import Error
 
 from .Database import Database
@@ -56,14 +56,10 @@ class DatabaseMySQL(Database):
             self.connect_database(database_name=self.database_name, create_if_not_exists=False)
         except:
             print(f"DatabaseMySQL >> Auto-connect to '{self.database_name}' failed. Use ``self.connect_database()`` to create a database.")
-            self.conn = None 
+            # self.conn = None 
 
         return None
 
-
-    def _connect_database(self, *args, **kwargs):
-        """See ``connect_database()``."""
-        return self.connect_database(*args, **kwargs)
 
     def connect_database(self, database_name: str = "my_db", create_if_not_exists: bool = True):
         """
@@ -110,7 +106,7 @@ class DatabaseMySQL(Database):
             if create_if_not_exists:
                 print(f"DatabaseMySQL >> Trying to create a database schema '{database_name}' instead.")
                 try:
-                    self._create_database(host=self.host, user=self.user, password=self.password, database_name=database_name, port=self.port)
+                    self.create_database(host=self.host, user=self.user, password=self.password, database_name=database_name, port=self.port)
                     print(f"DatabaseMySQL >> Connected to database schema '{database_name}'.")
 
                 except mysql.connector.Error as e:
@@ -129,10 +125,6 @@ class DatabaseMySQL(Database):
         return None
         
 
-    def _create_table(self, *args, **kwargs):
-        """See ``create_table()``."""
-        return self.create_table(*args, **kwargs)
-
     def create_table(self, table_name: str, column_definitions: list[str]):
         """
         Creates a table in a MySQL database.
@@ -150,15 +142,28 @@ class DatabaseMySQL(Database):
         -------
         >>> self.create_table('users', ['username VARCHAR(12) PRIMARY KEY', 'password VARCHAR(100) NOT NULL'])
         """
+        def _check_table_exists(table_name):
+            try:
+                cursor = self.conn.cursor()
+                cursor.execute(f"SHOW TABLES LIKE '{table_name}'")
+                result = cursor.fetchone()
+                if result:
+                    return True
+                else:
+                    return False
+            except mysql.connector.Error as e:
+                print(f"DatabaseMySQL >> MySQL error when creating table '{table_name}':", e)
+                return False
+            
         cursor = self.conn.cursor()
-        if not self._check_table_exists(table_name):
+        if not _check_table_exists(table_name):
             create_table_sql = f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(column_definitions)})"
             cursor.execute(create_table_sql)
             self.conn.commit()
             print(f"DatabaseMySQL >> Table '{table_name}' successfully created in MySQL.")
     
     
-    def _create_database(self, host, user, password, database_name, port):
+    def create_database(self, host, user, password, database_name, port):
         """
         Creates a MySQL database if it doesn't exist.
         """
@@ -181,10 +186,6 @@ class DatabaseMySQL(Database):
 
         return None
         
-
-    def _delete_data(self, *args, **kwargs):
-        """See ``delete_data()``."""
-        return self.delete_data(*args, **kwargs)
 
     def delete_data(self, FROM: str, WHERE: str, VALUES: tuple[str]):
         """
@@ -217,10 +218,6 @@ class DatabaseMySQL(Database):
         return None
     
 
-    def _disconnect_database(self, *args, **kwargs):
-        """See ``disconnect_database()``."""
-        return self.disconnect_database(*args, **kwargs)
-
     def disconnect_database(self):
         """
         Closes the database linked to the connector ``conn``.
@@ -233,10 +230,6 @@ class DatabaseMySQL(Database):
         return None
 
 
-    def _drop_table(self, *args, **kwargs):
-        """See ``drop_table()``."""
-        return self.drop_table(*args, **kwargs)
-    
     def drop_table(self, table_name: str):
         """
         Drops a table from the database.
@@ -254,10 +247,6 @@ class DatabaseMySQL(Database):
 
         return None
 
-
-    def _drop_database(self, *args, **kwargs):
-        """See ``drop_database()``."""
-        return self.drop_database(*args, **kwargs)
 
     def drop_database(self, database_name: str):
         """
@@ -284,10 +273,6 @@ class DatabaseMySQL(Database):
         return None       
 
 
-    def _list_databases(self, *args, **kwargs):
-        """See ``list_databases()``."""
-        return self.list_databases(*args, **kwargs)
-
     def list_databases(self, system_db: bool = False, display: bool = False):
         """
         Prints and returns the existing databases (schemas) visible to the user on the server.
@@ -297,7 +282,7 @@ class DatabaseMySQL(Database):
 
         cursor.execute("SHOW DATABASES;")
         databases_list = cursor.fetchall()
-        databases_list = [db[0] for db in databases_list] # tuples singleton to list
+        databases_list = [db[0] for db in databases_list] # tuples singleton to list # type: ignore
 
         if not system_db: 
             [databases_list.remove(schema) for schema in ['information_schema','mysql', 'performance_schema', 'sys']]
@@ -308,10 +293,6 @@ class DatabaseMySQL(Database):
 
         return databases_list
     
-    
-    def _list_tables(self, *args, **kwargs):
-        """See ``list_tables()``."""
-        return self.list_tables(*args, **kwargs)
 
     def list_tables(self, display: bool = False):
         """
@@ -326,8 +307,8 @@ class DatabaseMySQL(Database):
         try:
             cursor = self.conn.cursor()
             cursor.execute("SHOW TABLES;")
-            tables_list = [row[0] for row in cursor.fetchall()]  # Extract table names from the query result
-            if display: print(f"DatabaseMySQL >> Tables in '{self.database_name}': {', '.join(tables_list)}")
+            tables_list = [row[0] for row in cursor.fetchall()] # Extract table names from the query result # type: ignore
+            if display: print(f"DatabaseMySQL >> Tables in '{self.database_name}': {', '.join(tables_list)}") # type: ignore
             return tables_list
         
         except mysql.connector.Error as e:
@@ -335,16 +316,12 @@ class DatabaseMySQL(Database):
             return []
 
 
-    def _query_data(self, *args, **kwargs):
-        """See ``query_data()``."""
-        return self.query_data(*args, **kwargs)
-
     def query_data(self, 
                    SELECT: str,
                    FROM: str,
-                   WHERE: str = None,
-                   VALUES: tuple[str] = None,
-                   LIKE: tuple[str] = None):
+                   WHERE: Optional[str] = None,
+                   VALUES: Optional[tuple[str, Union[str, float, int]]] = None,
+                   LIKE: Optional[tuple[str, Union[str, float, int]]] = None):
         
         """
         Selects columns from a table under one condition.
@@ -437,10 +414,6 @@ class DatabaseMySQL(Database):
         return []
 
 
-    def _send_data(self, *args, **kwargs):
-        """See ``send_data()``."""
-        return self.send_data(*args, **kwargs)
-
     def send_data(self, table_name: str, **kwargs):
         """
         Inserts the input kwargs into the table ``table_name``. 
@@ -467,16 +440,4 @@ class DatabaseMySQL(Database):
         return None
     
 
-    def _check_table_exists(self, table_name):
-        try:
-            cursor = self.conn.cursor()
-            cursor.execute(f"SHOW TABLES LIKE '{table_name}'")
-            result = cursor.fetchone()
-            if result:
-                return True
-            else:
-                return False
-        except mysql.connector.Error as e:
-            print(f"DatabaseMySQL >> MySQL error when creating table '{table_name}':", e)
-            return False
         
