@@ -1,7 +1,7 @@
 import os, sys
 from typing import Union, Optional, Sequence
 from elasticsearch import Elasticsearch, helpers, NotFoundError
-import ssl
+import json
 import urllib3
 import warnings
 
@@ -75,52 +75,65 @@ class DatabaseElasticsearch(Database):
         """See ``create_index()``."""
         return self.create_index(*args, **kwargs)
 
-    def create_index(self, index_name: str, properties: dict[str, str], shards: int = 1, replicas: int = 1):
+    def create_index(self, 
+                     index_name: str, 
+                     properties: Optional[dict[str, str]] = None, 
+                     mapping_file: Optional[str] = None,
+                     shards: int = 1, 
+                     replicas: int = 1):
         """
-        Creates an index, with enforced properties.
+        Creates an index, with either inline properties or from a JSON mapping file.
 
         Parameters
         ----------
         index_name: str
             The name of the index to create.
-        properties: dict[str]
-            The index properties. Must be formatted as {'field':{'type': 'dtype'}}. See Examples below.
-        shards: int, 1
-            The number of shards to allocate.
-        replicas: int, 1
-            The number of replicas to create for each shard. Replicas may improve data availability and redundancy.
+        properties: dict[str], optional
+            The index properties. Format: {'field': {'type': 'dtype'}}.
+        mapping_file: str, optional
+            Path to a JSON file containing the full Elasticsearch mapping.
+        shards: int, default 1
+            Number of shards.
+        replicas: int, default 1
+            Number of replicas.
         
-        Examples
-        --------
-        >>> index_name = "my_index"
-        >>> properties = {
-                    "title": {"type": "text"},
-                    "description": {"type": "text"},
-                    "timestamp": {"type": "date"},
-                }
-        >>> create_tables(index_name=index_name, properties=properties, shards=2, replicas=1)
+        Notes
+        -----
+        If both 'properties' and 'mapping_file' are provided, the JSON file will be used.
         """
 
         if ' ' in index_name:
-            print(f"DatabaseElasticsearch >> Index name can't contain blank space. Index name changed to '{index_name.replace(' ', '-')}'.")
+            print(f"DatabaseElasticsearch >> Index name can't contain blank spaces. Index name changed to '{index_name.replace(' ', '-')}'.")
             index_name = index_name.replace(' ', '-')
 
-        settings = {
-            "settings": {
-                "number_of_shards": shards,
-                "number_of_replicas": replicas,
-            },
-            "mappings": {
-                "properties": properties
-            },
-        }
+        if mapping_file:
+            try:
+                with open(mapping_file, 'r') as f:
+                    settings = json.load(f)
+                print(f"DatabaseElasticsearch >> Mapping loaded from '{mapping_file}'.")
+            except Exception as e:
+                print(f"DatabaseElasticsearch >> Failed to load mapping file: {e}")
+                return
+        else:
+            if not properties:
+                print("DatabaseElasticsearch >> You must provide either 'properties' or a valid 'mapping_file'.")
+                return
 
-        # Create the index
+            settings = {
+                "settings": {
+                    "number_of_shards": shards,
+                    "number_of_replicas": replicas,
+                },
+                "mappings": {
+                    "properties": properties
+                },
+            }
+
         if not self.es.indices.exists(index=index_name):
             self.es.indices.create(index=index_name, body=settings)
             print(f"DatabaseElasticsearch >> Index '{index_name}' created.")
         else:
-            print(f"DatabaseElasticsearch >> Index '{index_name}' already exists.")    
+            print(f"DatabaseElasticsearch >> Index '{index_name}' already exists.")
 
     
     def disconnect_database(self):
