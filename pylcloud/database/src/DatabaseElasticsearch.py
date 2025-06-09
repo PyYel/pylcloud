@@ -405,3 +405,16 @@ class DatabaseElasticsearch(Database):
             print(f"DatabaseElasticsearch >> Error: An error occurred: {e}")
             return []
 
+
+    def commit_transactions(self):
+        """
+        Commits the transactions operated since the last commit.
+        """
+        raise NotImplementedError
+
+
+    def rollback_transactions(self):
+        """
+        roolbacks the transactions operated since the last commit.
+        """
+        raise NotImplementedError

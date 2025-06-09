@@ -31,6 +31,9 @@ class DatabasePostgreSQL(Database):
         except:
             print(f"DatabasePostgreSQL >> Auto-connect to '{self.database_name}' failed. Use ``self.connect_database()`` to create a database.")
     
+        return None
+
+
     def connect_database(self, database_name: str = "my_db", create_if_not_exists: bool = True):
         """
         Connects to a PostgreSQL database.
@@ -65,6 +68,9 @@ class DatabasePostgreSQL(Database):
                 print(f"DatabasePostgreSQL >> Could not connect to database host, program interrupted.")
                 return sys.exit(1)
 
+        return None
+
+
     def create_database(self, database_name):
         """
         Creates a PostgreSQL database if it doesn't exist.
@@ -88,6 +94,9 @@ class DatabasePostgreSQL(Database):
             print(f"DatabasePostgreSQL >> Error creating database: {e}")
             sys.exit(1)
 
+        return None
+
+
     def create_table(self, table_name: str, column_definitions: list[str]):
         """
         Creates a table in a PostgreSQL database.
@@ -96,7 +105,10 @@ class DatabasePostgreSQL(Database):
             try:
                 cursor = self.conn.cursor()
                 cursor.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = %s);", (table_name,))
-                return cursor.fetchone()[0] # type: ignore
+                if cursor.fetchone() is not None:
+                    return True
+                else:
+                    return False
             except Exception as e:
                 print(f"DatabasePostgreSQL >> PostgreSQL error when checking table '{table_name}': {e}")
                 return False
@@ -107,7 +119,12 @@ class DatabasePostgreSQL(Database):
             cursor.execute(create_table_sql)
             self.conn.commit()
             print(f"DatabasePostgreSQL >> Table '{table_name}' successfully created in PostgreSQL.")
+        else:
+            print(f"DatabasePostgreSQL >> Table '{table_name}' already exists.")
         cursor.close()
+
+        return None
+
 
     def delete_data(self, FROM: str, WHERE: str, VALUES: tuple[str]):
         """
@@ -124,6 +141,9 @@ class DatabasePostgreSQL(Database):
         finally:
             cursor.close()
 
+        return None
+
+
     def disconnect_database(self):
         """
         Closes the database connection.
@@ -131,6 +151,9 @@ class DatabasePostgreSQL(Database):
         if self.conn:
             self.conn.close()
             print(f"DatabasePostgreSQL >> Disconnected from database schema '{self.database_name}'.")
+
+        return None
+
 
     def drop_table(self, table_name: str):
         """
@@ -146,6 +169,9 @@ class DatabasePostgreSQL(Database):
             print(f"DatabasePostgreSQL >> Failed to drop table `{table_name}`: {e}")
         finally:
             cursor.close()
+
+        return None
+
 
     def drop_database(self, database_name: str):
         """
@@ -171,6 +197,9 @@ class DatabasePostgreSQL(Database):
         except Exception as e:
             print(f"DatabasePostgreSQL >> PostgreSQL error when dropping database schema: {e}")
 
+        return None
+
+
     def list_databases(self, display: bool = False):
         """
         Lists all databases on the server.
@@ -195,6 +224,7 @@ class DatabasePostgreSQL(Database):
             print(f"DatabasePostgreSQL >> PostgreSQL error when listing databases: {e}")
             return []
 
+
     def list_tables(self, display: bool = False):
         """
         Lists all tables in the current PostgreSQL schema.
@@ -210,6 +240,7 @@ class DatabasePostgreSQL(Database):
         except Exception as e:
             print(f"DatabasePostgreSQL >> PostgreSQL error when listing tables: {e}")
             return []
+
 
     def query_data(self,
                    SELECT: str,
@@ -253,6 +284,7 @@ class DatabasePostgreSQL(Database):
             print(f"DatabasePostgreSQL >> PostgreSQL error when selecting data: {e}")
             return []
 
+
     def send_data(self, table_name: str, **kwargs):
         """
         Inserts data into a PostgreSQL table.
@@ -270,3 +302,83 @@ class DatabasePostgreSQL(Database):
             self.conn.rollback()
         finally:
             cursor.close()
+
+        return None
+
+
+    def commit_transactions(self):
+        """
+        Commits the transactions operated since the last commit.
+        """
+        raise NotImplementedError
+
+
+    def rollback_transactions(self):
+        """
+        roolbacks the transactions operated since the last commit.
+        """
+        raise NotImplementedError
+
+
+    def execute_file(self, file_path: str):
+        """
+        Executes SQL commands from a .sql file or inserts data from a .json file.
+
+        Parameters
+        ----------
+        file_path : str
+            The path to the .sql or .json file.
+        """
+
+        import os
+
+        if not os.path.isfile(file_path):
+            print(f"DatabasePostgreSQL >> File '{file_path}' does not exist.")
+            return None
+
+        file_extension = os.path.splitext(file_path)[1]
+
+        try:
+            cursor = self.conn.cursor()
+
+            if file_extension == '.sql':
+                with open(file_path, 'r', encoding='utf-8') as sql_file:
+                    sql_commands = sql_file.read()
+                    cursor.execute(sql_commands)
+                    self.conn.commit()
+                    print(f"DatabasePostgreSQL >> SQL file '{file_path}' executed successfully.")
+
+            elif file_extension == '.json':
+                with open(file_path, 'r', encoding='utf-8') as json_file:
+                    data = json.load(json_file)
+
+                if not isinstance(data, list):
+                    print("DatabasePostgreSQL >> JSON file must contain a list of records (dictionaries).")
+                    return None
+
+                for record in data:
+                    if not isinstance(record, dict) or 'table' not in record or 'data' not in record:
+                        print("DatabasePostgreSQL >> JSON format invalid. Each record must contain 'table' and 'data' keys.")
+                        return None
+
+                    table_name = record['table']
+                    fields = ', '.join(record['data'].keys())
+                    placeholders = ', '.join(['%s'] * len(record['data']))
+                    values = tuple(record['data'].values())
+
+                    cursor.execute(f"INSERT INTO {table_name} ({fields}) VALUES ({placeholders});", values)
+
+                self.conn.commit()
+                print(f"DatabasePostgreSQL >> JSON file '{file_path}' data inserted successfully.")
+
+            else:
+                print(f"DatabasePostgreSQL >> Unsupported file type '{file_extension}'. Only .sql and .json are supported.")
+
+        except psycopg2.Error as e:
+            print(f"DatabasePostgreSQL >> PostgreSQL error when executing file: {e}")
+            self.conn.rollback()
+
+        finally:
+            cursor.close()
+
+        return None

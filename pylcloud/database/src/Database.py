@@ -49,33 +49,9 @@ class Database(ABC):
 
 
     @abstractmethod
-    def _create_table(self, *args, **kwargs):
+    def create_table(self, *args, **kwargs):
         """
         Creates a new index/collection.
-        """
-        pass
-
-
-    @abstractmethod    
-    def send_data(self, *args, **kwargs):
-        """
-        Deletes matching entries/records/documents from the DB.
-        """
-        pass
-
-
-    @abstractmethod    
-    def query_data(self, *args, **kwargs):
-        """
-        Retreives matching entries/records/documents from the DB.
-        """
-        pass
-
-
-    @abstractmethod    
-    def delete_data(self, *args, **kwargs):
-        """
-        Deletes matching entries/records/documents from the DB.
         """
         pass
 
@@ -106,7 +82,7 @@ class Database(ABC):
 
 
     @abstractmethod    
-    def _query_data(self, *args, **kwargs):
+    def query_data(self, *args, **kwargs):
         """
         Retreives matching entries/records/documents from the DB.
         """
@@ -114,9 +90,17 @@ class Database(ABC):
 
 
     @abstractmethod    
-    def _send_data(self, *args, **kwargs):
+    def send_data(self, *args, **kwargs):
         """
         Injects data into the DB by creating new entry/record/document.
+        """
+        pass
+
+
+    @abstractmethod    
+    def delete_data(self, *args, **kwargs):
+        """
+        Deletes matching entries/records/documents from the DB.
         """
         pass
 
