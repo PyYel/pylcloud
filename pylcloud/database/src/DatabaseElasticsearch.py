@@ -1,9 +1,7 @@
 import os, sys
-
+from typing import Union, Optional, Sequence
 from elasticsearch import Elasticsearch, helpers, NotFoundError
-import ssl
 import json
-import ssl
 import urllib3
 import warnings
 
@@ -62,10 +60,6 @@ class DatabaseElasticsearch(Database):
         return None
 
 
-    def _connect_database(self, *args, **kwargs):
-        """See ``connect_database()``."""
-        return self.connect_database(*args, **kwargs)
-
     def connect_database(self, 
                          host: str = "127.0.0.1",
                          user: str = "user",
@@ -77,61 +71,70 @@ class DatabaseElasticsearch(Database):
         return self.es
     
 
-    def _create_table(self, *args, **kwargs):
+    def create_table(self, *args, **kwargs):
         """See ``create_index()``."""
         return self.create_index(*args, **kwargs)
 
-    def create_index(self, index_name: str, properties: dict[str], shards: int = 1, replicas: int = 1):
+    def create_index(self, 
+                     index_name: str, 
+                     properties: Optional[dict[str, str]] = None, 
+                     mapping_file: Optional[str] = None,
+                     shards: int = 1, 
+                     replicas: int = 1):
         """
-        Creates an index, with enforced properties.
+        Creates an index, with either inline properties or from a JSON mapping file.
 
         Parameters
         ----------
         index_name: str
             The name of the index to create.
-        properties: dict[str]
-            The index properties. Must be formatted as {'field':{'type': 'dtype'}}. See Examples below.
-        shards: int, 1
-            The number of shards to allocate.
-        replicas: int, 1
-            The number of replicas to create for each shard. Replicas may improve data availability and redundancy.
+        properties: dict[str], optional
+            The index properties. Format: {'field': {'type': 'dtype'}}.
+        mapping_file: str, optional
+            Path to a JSON file containing the full Elasticsearch mapping.
+        shards: int, default 1
+            Number of shards.
+        replicas: int, default 1
+            Number of replicas.
         
-        Examples
-        --------
-        >>> index_name = "my_index"
-        >>> properties = {
-                    "title": {"type": "text"},
-                    "description": {"type": "text"},
-                    "timestamp": {"type": "date"},
-                }
-        >>> create_tables(index_name=index_name, properties=properties, shards=2, replicas=1)
+        Notes
+        -----
+        If both 'properties' and 'mapping_file' are provided, the JSON file will be used.
         """
 
         if ' ' in index_name:
-            print(f"DatabaseElasticsearch >> Index name can't contain blank space. Index name changed to '{index_name.replace(' ', '-')}'.")
+            print(f"DatabaseElasticsearch >> Index name can't contain blank spaces. Index name changed to '{index_name.replace(' ', '-')}'.")
             index_name = index_name.replace(' ', '-')
 
-        settings = {
-            "settings": {
-                "number_of_shards": shards,
-                "number_of_replicas": replicas,
-            },
-            "mappings": {
-                "properties": properties
-            },
-        }
+        if mapping_file:
+            try:
+                with open(mapping_file, 'r') as f:
+                    settings = json.load(f)
+                print(f"DatabaseElasticsearch >> Mapping loaded from '{mapping_file}'.")
+            except Exception as e:
+                print(f"DatabaseElasticsearch >> Failed to load mapping file: {e}")
+                return
+        else:
+            if not properties:
+                print("DatabaseElasticsearch >> You must provide either 'properties' or a valid 'mapping_file'.")
+                return
 
-        # Create the index
+            settings = {
+                "settings": {
+                    "number_of_shards": shards,
+                    "number_of_replicas": replicas,
+                },
+                "mappings": {
+                    "properties": properties
+                },
+            }
+
         if not self.es.indices.exists(index=index_name):
             self.es.indices.create(index=index_name, body=settings)
             print(f"DatabaseElasticsearch >> Index '{index_name}' created.")
         else:
-            print(f"DatabaseElasticsearch >> Index '{index_name}' already exists.")    
+            print(f"DatabaseElasticsearch >> Index '{index_name}' already exists.")
 
-
-    def _disconnect_database(self, *args, **kwargs):
-        """See ``disconnect_database()``."""
-        return self.disconnect_database(*args, **kwargs)
     
     def disconnect_database(self):
         """
@@ -139,10 +142,6 @@ class DatabaseElasticsearch(Database):
         """
         pass
 
-
-    def _drop_database(self, *args, **kwargs):
-        """See ``drop_database()``."""
-        return self.drop_database(*args, **kwargs)
     
     def drop_database(self, database_name: str):
         """
@@ -152,7 +151,7 @@ class DatabaseElasticsearch(Database):
         raise NotImplementedError
 
 
-    def _drop_table(self, *args, **kwargs):
+    def drop_table(self, *args, **kwargs):
         """See ``drop_index()``."""
         return self.drop_index(*args, **kwargs)
     
@@ -169,11 +168,8 @@ class DatabaseElasticsearch(Database):
         return None
     
 
-    def _delete_data(self, *args, **kwargs):
-        """See ``delete_data()``."""
-        return self.delete_data(*args, **kwargs)
     
-    def delete_data(self, index_name: str, pairs: dict[str] = {}):
+    def delete_data(self, index_name: str, pairs: dict[str, str] = {}):
         """
         Deletes all the records from an index that match the ``pairs`` conditions.
 
@@ -199,7 +195,7 @@ class DatabaseElasticsearch(Database):
         return None
 
 
-    def _list_databases(self, *args, **kwargs):
+    def list_databases(self, *args, **kwargs):
         """See ``list_clusters()``."""
         return self.list_clusters(*args, **kwargs)
     
@@ -212,7 +208,7 @@ class DatabaseElasticsearch(Database):
         return info
     
 
-    def _list_tables(self, *args, **kwargs):
+    def list_tables(self, *args, **kwargs):
         """See ``list_indexes()``."""
         return self.list_indexes(*args, **kwargs)
 
@@ -231,23 +227,18 @@ class DatabaseElasticsearch(Database):
         """
         if system_db:
             # built-in system indexes start with a dot
-            indexes = [index['index'] for index in self.es.cat.indices(format='json')]
+            indexes = [index['index'] for index in self.es.cat.indices(format='json')] # type: ignore
             print(f"DatabaseElasticsearch >> Found indexes: {', '.join(indexes)}")
             return indexes
         else:
-            indexes = [index['index'] for index in self.es.cat.indices(format='json') if not index['index'].startswith(".")]
+            indexes = [index['index'] for index in self.es.cat.indices(format='json') if not index['index'].startswith(".")] # type: ignore
             print(f"DatabaseElasticsearch >> Found indexes: {', '.join(indexes)}")
             return indexes
         
         return None
 
 
-    def _send_data(self, *args, **kwargs):
-        """See ``send_data()``."""
-        return self.send_data(*args, **kwargs)
-
-
-    def send_data(self, index_name: str, documents: list[dict]):
+    def send_data(self, index_name: str, documents: list[dict], _ids: Optional[list[str]] = None):
         """
         Sends data to the Elasticsearch index. Can handle single files, multiple files, and directories.
 
@@ -255,47 +246,39 @@ class DatabaseElasticsearch(Database):
         ----------
         index_name: str
             The name of the index to send data to.
-        workspace_name: str
-            The name of the workspace.
-        path: str
-            The list of preprocessed files to inject into Elastic. 
+        documents: list[dict]
+            The payload to inject into the index.
+        _ids: list[str], None
+            Overwrites auto-generated _id fileds for custom indexing. 
 
         Notes
         -----
         - For a file_path of format ``path/to/file.ext``, the preprocessed data should be inside ``path/to/file`` eponymous folder/
         """
-
-        if isinstance(files_paths, str): files_paths = [files_paths]
+        if _ids is None: _ids = [None] * len(documents) # type: ignore
 
         actions = [
             {
                 "_index": index_name,                           # Target indexes
-                "_id": self._hash_content(document=document),   # Hashed id for log unicity
+                "_id": _id,   # Hashed id for log unicity
                 "_source": document                             # Document content
             }
-            for document in documents
+            for document, _id in zip(documents, _ids) # type: ignore
         ]
 
-        # for action in actions:
-        #     response = self.es.index(index=index_name, document=action["_source"], id=action["_id"])
-        #     print(response)
-
         print(f"DatabaseElasticsearch >> Sending {len(actions)} documents into index '{index_name}'.")
-        response = helpers.bulk(self.es, actions, raise_on_error =True)
+        response = helpers.bulk(self.es, actions, raise_on_error=False)
         if response[1]:
-            print(f"DatabaseElasticsearch >> API error when sending documents: {response}")
+            print(f"DatabaseElasticsearch >> Interface error when sending documents: {response}")
 
         return None
+    
 
-
-    def _query_data(self, *args, **kwargs):
-        """See ``query_data()``."""
-        return self.query_data(*args, **kwargs)
 
     def query_data(self, 
                    index_name: str, 
-                   must_pairs: list[dict[str]] = [], 
-                   should_pairs: list[dict[str]] = []):
+                   must_pairs: list[dict[str, str]] = [], 
+                   should_pairs: list[dict[str, str]] = []):
         """
         Retrieves data from the Elasticsearch DB.
 
@@ -377,8 +360,8 @@ class DatabaseElasticsearch(Database):
 
     def similarity_search(self, index_name: str, 
                           query_vector: list[float], 
-                          must_pairs: list[dict[str]] = [], 
-                          should_pairs: list[dict[str]] = [],
+                          must_pairs: list[dict[str, str]] = [], 
+                          should_pairs: list[dict[str, str]] = [],
                           k: int = 5):
         """
         Performs k-NN similarity search in Elasticsearch.
@@ -435,3 +418,16 @@ class DatabaseElasticsearch(Database):
             print(f"DatabaseElasticsearch >> Error: An error occurred: {e}")
             return []
 
+
+    def commit_transactions(self):
+        """
+        Commits the transactions operated since the last commit.
+        """
+        raise NotImplementedError
+
+
+    def rollback_transactions(self):
+        """
+        roolbacks the transactions operated since the last commit.
+        """
+        raise NotImplementedError

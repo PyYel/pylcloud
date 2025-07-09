@@ -1,6 +1,8 @@
 import sqlite3
 import sys
 import os
+from typing import Union, Optional
+
 
 from .Database import Database
 
@@ -29,10 +31,6 @@ class DatabaseSQLite(Database):
 
         return None
     
-
-    def _connect_database(self, *args, **kwargs):
-        """See ``connect_database()``."""
-        return self.connect_database(*args, **kwargs)
     
     def connect_database(self, database_path: str):
         """
@@ -60,10 +58,6 @@ class DatabaseSQLite(Database):
         return None
     
 
-    def _create_table(self, *args, **kwargs):
-        """See ``create_table()``."""
-        return self.create_table(*args, **kwargs)
-
     def create_table(self, table_name: str, column_definitions: list[str]):
         """
         Creates a table in the SQLite database.
@@ -90,18 +84,10 @@ class DatabaseSQLite(Database):
     
         return None
     
-
-    def _delete_data(self, *args, **kwargs):
-        """See ``delete_data()``."""
-        return self.delete_data(*args, **kwargs)
     
     def delete_data(self):
         raise NotImplementedError
     
-
-    def _disconnect_database(self, *args, **kwargs):
-        """See ``disconnect_database()``."""
-        return self.disconnect_database(*args, **kwargs)
     
     def disconnect_database(self):
         """
@@ -113,12 +99,8 @@ class DatabaseSQLite(Database):
 
         return None
     
-
-    def _drop_database(self, *args, **kwargs):
-        """See ``drop_database()``."""
-        return self.drop_database(*args, **kwargs)
     
-    def drop_database(self, database_path: str = None):
+    def drop_database(self, database_path: Optional[str] = None):
         """
         Drops a database by deleting the .db local file. If no path is specified,
         will try to delete the DB currently in use instead.
@@ -139,10 +121,6 @@ class DatabaseSQLite(Database):
             print(f"DatabaseSQLite >> Could not delete '{os.path.basename(database_path)}': {e}")
 
 
-    def _drop_table(self, *args, **kwargs):
-        """See ``drop_table()``."""
-        return self.drop_table(*args, **kwargs)
-
     def drop_table(self, table_name: str):
         """
         Drops a table if it exists in the SQLite database.
@@ -161,22 +139,14 @@ class DatabaseSQLite(Database):
             print(f"DatabaseSQLite >> SQLite error when dropping table '{table_name}': {e}")
 
         return None
-    
 
-    def _list_databases(self, *args, **kwargs):
-        """See ``list_databases()``."""
-        return self.list_databases(*args, **kwargs)
-    
+
     def list_databases(self):
         """
         SQLite can only be connected at one database at once, so this won't do anything but return the current database.
         """
         return [self.database_path]
 
-
-    def _list_tables(self, *args, **kwargs):
-        """See ``list_tables()``."""
-        return self.list_tables(*args, **kwargs)
 
     def list_tables(self):
         """
@@ -196,14 +166,13 @@ class DatabaseSQLite(Database):
         except sqlite3.Error as e:
             print(f"DatabaseSQLite >> SQLite error when listing tables: {e}")
             return []
+        
     
-
-    def _query_data(self, *args, **kwargs):
-        """See ``query_data()``."""
-        return self.query_data(*args, **kwargs)
-    
-    
-    def query_data(self, table_name: str, columns: str = "*", condition: str = None, values: tuple = None):
+    def query_data(self, 
+                   table_name: str, 
+                   columns: str = "*", 
+                   condition: Optional[str] = None, 
+                   values: Optional[tuple[str, Union[str, float, int]]] = None):
         """
         Retrieves data from a table under a specific condition.
 
@@ -250,10 +219,6 @@ class DatabaseSQLite(Database):
             print(f"DatabaseSQLite >> Condition and values must both be filled.")
             return []
 
-
-    def _send_data(self, *args, **kwargs):
-        """See ``send_data()``."""
-        return self.send_data(*args, **kwargs)
 
     def send_data(self, table_name: str, **kwargs):
         """
