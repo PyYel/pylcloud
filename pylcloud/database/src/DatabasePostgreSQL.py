@@ -273,33 +273,52 @@ class DatabasePostgreSQL(Database):
 
     def create_table(self, table_name: str, column_definitions: list[str]):
         """
-        Creates a table in a PostgreSQL database.
+        Creates a table in the PostgreSQL database.
+
+        Parameters
+        ----------
+        table_name: str
+            Name of the table to create
+        column_definitions: list[str]
+            List of column definitions (e.g., ["id SERIAL PRIMARY KEY", "name VARCHAR(100) NOT NULL"])
+
+        Returns
+        -------
+        bool
+            True if table was created or already exists and is accessible, False otherwise
         """
-        def _check_table_exists(table_name):
-            try:
-                cursor = self.conn.cursor()
-                cursor.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = %s);", (table_name,))
-                if cursor.fetchone() is not None:
+
+        # Ensure schema_name is not None
+        if self.schema_name is None:
+            self.schema_name = 'public'
+
+        try:
+            with self.conn.cursor() as cursor:
+                full_table_name = f"{self.schema_name}.{table_name}"
+
+                # Create the table with explicit schema reference
+                create_table_sql = f"CREATE TABLE IF NOT EXISTS {full_table_name} ({', '.join(column_definitions)})"
+                cursor.execute(create_table_sql)
+
+                # Verify the table was created and is accessible
+                cursor.execute(f"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = %s AND table_name = %s)", 
+                            (self.schema_name, table_name))
+                table_exists = cursor.fetchone()[0]
+
+                if table_exists:
+                    print(f"DatabasePostgreSQL >> Table '{self.schema_name}.{table_name}' successfully created or already exists.")
+                    self.conn.commit()
                     return True
                 else:
+                    print(f"DatabasePostgreSQL >> Failed to create table '{self.schema_name}.{table_name}'.")
                     return False
-            except Exception as e:
-                print(f"DatabasePostgreSQL >> PostgreSQL error when checking table '{table_name}': {e}")
-                return False
 
-        cursor = self.conn.cursor()
-        if not _check_table_exists(table_name):
-            create_table_sql = f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(column_definitions)})"
-            cursor.execute(create_table_sql)
-            self.conn.commit()
-            print(f"DatabasePostgreSQL >> Table '{table_name}' successfully created in PostgreSQL.")
-        else:
-            print(f"DatabasePostgreSQL >> Table '{table_name}' already exists.")
-        cursor.close()
-
-        return None
-
-
+        except Exception as e:
+            self.conn.rollback()
+            print(f"DatabasePostgreSQL >> Error creating table '{table_name}': {e}")
+            return False
+        
+        
     def delete_data(self, FROM: str, WHERE: str, VALUES: tuple[str]):
         """
         Removes data from a table under a condition.
