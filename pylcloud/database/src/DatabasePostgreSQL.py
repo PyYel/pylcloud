@@ -13,7 +13,7 @@ class DatabasePostgreSQL(Database):
     compatible with standard PostgreSQL, AWS Aurora PostgreSQL, and AWS RDS PostgreSQL.
     """
     def __init__(self,
-                 database_name: str = "postgres",
+                 schema_name: str = "public",
                  host: str = "127.0.0.1",
                  user: str = "postgres",
                  password: Optional[str] = None,
@@ -30,8 +30,9 @@ class DatabasePostgreSQL(Database):
 
         Parameters
         ----------
-        database_name: str
-            The name of the database (schema) to connect to.
+        schema_name: str
+            The name of the schema (can be seen as the database name) to connect to. Having multiple databases on a same server is not
+            supported, so the server management is limited to schema abstrcation level. 
         host: str
             The host/address of the database server.
             - When connecting to a local server, the IP of host computer
@@ -59,7 +60,7 @@ class DatabasePostgreSQL(Database):
         """
         super().__init__()
 
-        self.database_name = database_name.lower()
+        self.schema_name = schema_name.lower()
         self.host = host
         self.user = user
         self.password = password
@@ -74,14 +75,14 @@ class DatabasePostgreSQL(Database):
         self.conn = None
 
         try:
-            self.connect_database(database_name=self.database_name, create_if_not_exists=False)
+            self.connect_database(schema_name=self.schema_name, create_if_not_exists=False)
         except Exception as e:
-            print(f"DatabasePostgreSQL >> Auto-connect to '{self.database_name}' failed, make sure the schema and user exist: {e}")
+            print(f"DatabasePostgreSQL >> Auto-connect to '{self.schema_name}' failed, make sure the schema and user exist: {e}")
         
         return None
     
 
-    def _create_iam_user(self, user: str, database_name: str):
+    def _create_iam_user(self, user: str, schema_name: str):
         """Create a database user with IAM authentication. The user should match an existing IAM user with RDS permissions."""
         try:
             with self.conn.cursor() as cursor:
@@ -105,14 +106,14 @@ class DatabasePostgreSQL(Database):
 
                 cursor.execute(
                     sql.SQL("GRANT ALL PRIVILEGES ON SCHEMA {} TO {}").format(
-                        sql.Identifier(database_name),
+                        sql.Identifier(schema_name),
                         sql.Identifier(user)
                     )
                 )
                 cursor.execute(
                     sql.SQL("ALTER USER {} SET search_path TO {}").format(
                         sql.Identifier(user),
-                        sql.Identifier(database_name)
+                        sql.Identifier(schema_name)
                     )
                 )
                 cursor.execute(
@@ -120,7 +121,7 @@ class DatabasePostgreSQL(Database):
                         sql.Identifier(user)
                     )
                 )
-                print(f"DatabasePostgreSQL >> Granted privileges on schema '{database_name}' to user '{user}'")
+                print(f"DatabasePostgreSQL >> Granted privileges on schema '{schema_name}' to user '{user}'")
 
         except Exception as e:
             print(f"DatabasePostgreSQL >> Error creating IAM user: {e}")
@@ -128,31 +129,58 @@ class DatabasePostgreSQL(Database):
         return None
 
 
-    def connect_database(self, database_name: Optional[str] = None, create_if_not_exists: bool = False):
+    def connect_database(self, schema_name: Optional[str] = None, create_if_not_exists: bool = False):
         """
-        Connects to a PostgreSQL database (schema). This is also used to create a database (schema) and use it directly.
+        Connects to the PostgreSQL 'postgres' database and sets the specified schema as the search path.
 
         Parameters
         ----------
-        database_name: Optional[str] 
-            Overwrites the ``__init__`` database name. Also use this name when creating a new schema.
+        schema_name: Optional[str] 
+            The schema name to use within the postgres database. If None, uses the schema name from __init__.
         create_if_not_exists: bool
-            Whereas creating said schema or not (does nothing if the schema already exist).
+            Whether to create the specified schema if it doesn't exist.
 
         Note
         ----
         - Connection will instantiate a connector object: ``self.conn``.
+        - This method always connects to the 'postgres' database and then sets the search path to the specified schema.
         """
+
+        def _create_schema(schema_name: str):
+            """
+            Creates a new schema in the PostgreSQL database if it doesn't exist.
+
+            Parameters
+            ----------
+            schema_name: str
+                The name of the schema to create.
+            """
+            try:
+                with self.conn.cursor() as cursor:
+                    # Create schema if it doesn't exist
+                    cursor.execute(f"CREATE SCHEMA IF NOT EXISTS {self.schema_name};")
+                    self.conn.commit()
+                    print(f"DatabasePostgreSQL >> Schema '{self.schema_name}' created successfully.")
+
+                    # Set the search path to the new schema
+                    cursor.execute(f"SET search_path TO {self.schema_name}, public;")
+                    self.conn.commit()
+            except Exception as e:
+                print(f"DatabasePostgreSQL >> Error creating schema: {e}")
+                raise
+
+            return None
 
         def _get_connection_params():
             """
             Prepares connection parameters based on the connection type.
+            Always connects to 'postgres' database.
             """
             params = {
                 'host': self.host,
                 'user': self.user,
                 'password': self.password,
-                'dbname': self.database_name,
+                'dbname': 'postgres',  # Always connect to 'postgres' database
                 'port': self.port,
                 'connect_timeout': self.connection_timeout
             }
@@ -184,63 +212,41 @@ class DatabasePostgreSQL(Database):
 
             return params
 
-        if database_name:
-            self.database_name = database_name.lower()
+        # Update schema name if provided
+        if schema_name:
+            self.schema_name = schema_name.lower()
 
         try:
+            # Connect and use schema (creates it if create_if_not_exists)
             connection_params = _get_connection_params()
             self.conn = psycopg2.connect(**connection_params)
-            print(f"DatabasePostgreSQL >> Connected to database schema '{self.database_name}'.")
+
+            with self.conn.cursor() as cursor:
+                cursor.execute("SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name = %s)", 
+                            (self.schema_name,))
+                schema_exists = cursor.fetchone()[0]
+
+                if not schema_exists:
+                    if create_if_not_exists:
+                        print(f"DatabasePostgreSQL >> Schema '{self.schema_name}' does not exist. Creating it.")
+                        _create_schema()
+                    else:
+                        print(f"DatabasePostgreSQL >> Schema '{self.schema_name}' does not exist and create_if_not_exists=False.")
+                        self.conn.close()
+                        return sys.exit(1)
+
+                # Set the search path to the specified schema
+                cursor.execute(f"SET search_path TO {self.schema_name}, public;")
+                self.conn.commit()
+
+            print(f"DatabasePostgreSQL >> Connected to database (schema) '{self.schema_name}'.")
 
         except psycopg2.OperationalError as e:
-            if 'does not exist' in str(e):
-                print(f"DatabasePostgreSQL >> Database schema '{self.database_name}' does not exist.")
-            else:
-                print(f"DatabasePostgreSQL >> Connection error: {e}")
-
-            if create_if_not_exists:
-                print(f"DatabasePostgreSQL >> Trying to create database schema '{self.database_name}' instead.")
-                try:
-                    self.create_database(self.database_name)
-                    print(f"DatabasePostgreSQL >> Connected to database schema '{self.database_name}'.")
-                except Exception as e:
-                    print(f"DatabasePostgreSQL >> Could not connect to database host, program interrupted: {e}")
-                    return sys.exit(1)
-            else:
-                print(f"DatabasePostgreSQL >> Could not connect to database host, program interrupted.")
-                return sys.exit(1)
-
-        return None
-    
-
-    def create_database(self, database_name: str = None):
-        """
-        Creates a PostgreSQL database if it doesn't exist.
-        """
-        try:
-
-            self.conn.autocommit = True
-            cursor = self.conn.cursor()
-
-            # Check if database exists first (safer for AWS environments)
-            cursor.execute("SELECT 1 FROM pg_database WHERE datname = %s", (database_name,))
-            exists = cursor.fetchone()
-
-            if not exists:
-                cursor.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database_name)))
-                print(f"DatabasePostgreSQL >> Database '{database_name}' created successfully.")
-            else:
-                print(f"DatabasePostgreSQL >> Database '{database_name}' already exists.")
-
-            cursor.close()
-            self.conn.close()
-
-            # Connect to the newly created or existing database
-            self.connect_database(database_name, create_if_not_exists=False)
-
+            print(f"DatabasePostgreSQL >> Connection error: {e}")
+            return sys.exit(1)
         except Exception as e:
-            print(f"DatabasePostgreSQL >> Error creating database: {e}")
-            sys.exit(1)
+            print(f"DatabasePostgreSQL >> Unexpected error: {e}")
+            return sys.exit(1)
 
         return None
     
@@ -298,7 +304,7 @@ class DatabasePostgreSQL(Database):
         """
         if self.conn:
             self.conn.close()
-            print(f"DatabasePostgreSQL >> Disconnected from database schema '{self.database_name}'.")
+            print(f"DatabasePostgreSQL >> Disconnected from database schema '{self.schema_name}'.")
 
         return None
 
@@ -321,7 +327,7 @@ class DatabasePostgreSQL(Database):
         return None
 
 
-    def drop_database(self, database_name: str):
+    def drop_database(self, schema_name: str):
         """
         Drops the entire PostgreSQL database.
         """
@@ -338,8 +344,8 @@ class DatabasePostgreSQL(Database):
             )
             conn.autocommit = True
             cursor = conn.cursor()
-            cursor.execute(sql.SQL("DROP DATABASE IF EXISTS {}").format(sql.Identifier(database_name)))
-            print(f"DatabasePostgreSQL >> Successfully dropped '{database_name}' database schema.")
+            cursor.execute(sql.SQL("DROP DATABASE IF EXISTS {}").format(sql.Identifier(schema_name)))
+            print(f"DatabasePostgreSQL >> Successfully dropped '{schema_name}' database schema.")
             cursor.close()
             conn.close()
         except Exception as e:
@@ -382,7 +388,7 @@ class DatabasePostgreSQL(Database):
             cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';")
             tables_list = [row[0] for row in cursor.fetchall()]
             if display:
-                print(f"DatabasePostgreSQL >> Tables in '{self.database_name}': {', '.join(tables_list)}")
+                print(f"DatabasePostgreSQL >> Tables in '{self.schema_name}': {', '.join(tables_list)}")
             cursor.close()
             return tables_list
         except Exception as e:
