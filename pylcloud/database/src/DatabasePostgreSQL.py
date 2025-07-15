@@ -60,7 +60,7 @@ class DatabasePostgreSQL(Database):
         """
         super().__init__()
 
-        self.schema_name = schema_name.lower()
+        self.schema_name = schema_name.lower().replace("-", "_").replace(" ", "_")
         self.host = host
         self.user = user
         self.password = password
