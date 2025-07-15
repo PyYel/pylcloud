@@ -96,7 +96,7 @@ class DatabasePostgreSQL(Database):
         """
 
         if schema_name is not None:
-            self.schema_name = schema_name
+            self.schema_name = schema_name.lower().replace("-", "_").replace(" ", "_")
 
         try:
             with self.conn.cursor() as cursor:
