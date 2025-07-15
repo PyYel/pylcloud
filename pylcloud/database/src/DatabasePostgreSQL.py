@@ -94,10 +94,10 @@ class DatabasePostgreSQL(Database):
 
                 if not user_exists:
                     cursor.execute(
-                        sql.SQL("DatabasePostgreSQL >> CREATE USER {} WITH LOGIN").format(sql.Identifier(user))
+                        sql.SQL("CREATE USER {} WITH LOGIN").format(sql.Identifier(user))
                     )
                     cursor.execute(
-                        sql.SQL("DatabasePostgreSQL >> GRANT rds_iam TO {}").format(sql.Identifier(user))
+                        sql.SQL("GRANT rds_iam TO {}").format(sql.Identifier(user))
                     )
                     print(f"DatabasePostgreSQL >> User '{user}' created with IAM authentication")
                 else:
@@ -143,7 +143,7 @@ class DatabasePostgreSQL(Database):
         ----
         - Connection will instantiate a connector object: ``self.conn``.
         """
-        
+
         def _get_connection_params():
             """
             Prepares connection parameters based on the connection type.
