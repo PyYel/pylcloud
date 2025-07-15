@@ -28,11 +28,13 @@ class DatabasePostgreSQL(Database):
         A high-level interface for PostgreSQL server database, compatible with standard PostgreSQL, 
         AWS Aurora PostgreSQL, and AWS RDS PostgreSQL.
 
+        For an explanation of the 'database' and 'schema' denomination, see the Notes below.
+
         Parameters
         ----------
         schema_name: str
             The name of the schema (can be seen as the database name) to connect to. Having multiple databases on a same server is not
-            supported, so the server management is limited to schema abstrcation level. 
+            supported, so the server management is limited to schema level. 
         host: str
             The host/address of the database server.
             - When connecting to a local server, the IP of host computer
@@ -57,6 +59,15 @@ class DatabasePostgreSQL(Database):
             AWS secret access key for IAM authentication.
         aws_region_name: Optional[str]
             AWS region name for IAM authentication.
+
+        Notes
+        -----
+        - The 'database' in common words often refers to a 'schema' in technical terms. Thus, a database can 
+        rather be seen as a server, and a schema as a database.
+            - A schema is a collection of tables
+            - A database is a collection of schemas
+        - Database management is a rather uncommon operation. For a more streamlined usage of this helper, management is limited
+        to schema level.
         """
         super().__init__()
 
