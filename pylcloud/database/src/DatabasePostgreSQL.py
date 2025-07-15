@@ -82,8 +82,22 @@ class DatabasePostgreSQL(Database):
         return None
     
 
-    def _create_iam_user(self, user: str, schema_name: str):
-        """Create a database user with IAM authentication. The user should match an existing IAM user with RDS permissions."""
+    def _create_iam_user(self, user: str, schema_name: Optional[str] = None):
+        """
+        Create a database user with IAM authentication. 
+        The user should match an existing IAM user with RDS permissions.
+
+        Parameters
+        ----------
+        user: str
+            The name of the IAM user to create.
+        schema_name: str
+            The schema to give user access to. If None, will apply to the current schema in use.
+        """
+
+        if schema_name is not None:
+            self.schema_name = schema_name
+
         try:
             with self.conn.cursor() as cursor:
                 # Check if user exists
@@ -106,14 +120,14 @@ class DatabasePostgreSQL(Database):
 
                 cursor.execute(
                     sql.SQL("GRANT ALL PRIVILEGES ON SCHEMA {} TO {}").format(
-                        sql.Identifier(schema_name),
+                        sql.Identifier(self.schema_name),
                         sql.Identifier(user)
                     )
                 )
                 cursor.execute(
                     sql.SQL("ALTER USER {} SET search_path TO {}").format(
                         sql.Identifier(user),
-                        sql.Identifier(schema_name)
+                        sql.Identifier(self.schema_name)
                     )
                 )
                 cursor.execute(
@@ -121,7 +135,7 @@ class DatabasePostgreSQL(Database):
                         sql.Identifier(user)
                     )
                 )
-                print(f"DatabasePostgreSQL >> Granted privileges on schema '{schema_name}' to user '{user}'")
+                print(f"DatabasePostgreSQL >> Granted privileges on schema '{self.schema_name}' to user '{user}'. Consider reconnecting to the DB.")
 
         except Exception as e:
             print(f"DatabasePostgreSQL >> Error creating IAM user: {e}")
@@ -146,14 +160,9 @@ class DatabasePostgreSQL(Database):
         - This method always connects to the 'postgres' database and then sets the search path to the specified schema.
         """
 
-        def _create_schema(schema_name: str):
+        def _create_schema():
             """
             Creates a new schema in the PostgreSQL database if it doesn't exist.
-
-            Parameters
-            ----------
-            schema_name: str
-                The name of the schema to create.
             """
             try:
                 with self.conn.cursor() as cursor:
@@ -198,7 +207,7 @@ class DatabasePostgreSQL(Database):
                     token = client.generate_db_auth_token(
                         DBHostname=self.host,
                         Port=int(self.port), 
-                        DBUsername=self.user, # IAM User
+                        DBUsername=self.user, # IAM Username
                         Region=self.aws_region_name
                     )
                     params['password'] = token
