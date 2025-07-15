@@ -13,18 +13,16 @@ class DatabasePostgreSQL(Database):
     compatible with standard PostgreSQL, AWS Aurora PostgreSQL, and AWS RDS PostgreSQL.
     """
     def __init__(self,
-                 database_name: str = "my_db",
+                 database_name: str = "postgres",
                  host: str = "127.0.0.1",
-                 user: str = "admin",
-                 password: str = "password",
+                 user: str = "postgres",
+                 password: Optional[str] = None,
                  port: str = "5432",
                  ssl_mode: Optional[str] = None,
-                 ssl_root_cert: Optional[str] = None,
                  connection_timeout: int = 30,
                  aws_access_key_id: Optional[str] = None,
                  aws_secret_access_key: Optional[str] = None,
                  aws_region_name: Optional[str] = None,
-                 use_iam_auth: bool = False
                  ) -> None:
         """
         A high-level interface for PostgreSQL server database, compatible with standard PostgreSQL, 
@@ -40,101 +38,157 @@ class DatabasePostgreSQL(Database):
             - When connecting to AWS, the address of the read/write endpoint
         user: str
             The user to assume when interacting with the DB
+            - Must be an existing DB user
+            - Can be an IAM user, provided an homonymous IAM user exists
         password: str
             The password for the database user (not used if IAM authentication is enabled)
+            - When a password is given, will assume a direct connection to the DB using the given user and password
+            - When password is None, will assume an IAM authentication, so a connection token will be generated for this IAM user
         port: str
-            The port number for the database connection
+            The port number for the database connection.
         ssl_mode: Optional[str]
-            SSL mode for the connection (e.g., 'require', 'verify-ca', 'verify-full')
-        ssl_root_cert: Optional[str]
-            Path to the SSL root certificate
+            SSL mode for the connection (e.g., 'require', 'verify-ca', 'verify-full').
         connection_timeout: int
-            Connection timeout in seconds
+            Connection timeout in seconds.
         aws_access_key_id: Optional[str]
-            AWS access key ID for IAM authentication
+            AWS access key ID for IAM authentication.
         aws_secret_access_key: Optional[str]
-            AWS secret access key for IAM authentication
+            AWS secret access key for IAM authentication.
         aws_region_name: Optional[str]
-            AWS region name for IAM authentication
-        use_iam_auth: bool
-            Whether to use IAM authentication for AWS RDS/Aurora
+            AWS region name for IAM authentication.
         """
         super().__init__()
 
-        # Standard PostgreSQL connection information
         self.database_name = database_name.lower()
         self.host = host
         self.user = user
         self.password = password
         self.port = port
         self.ssl_mode = ssl_mode
-        self.ssl_root_cert = ssl_root_cert
         self.connection_timeout = connection_timeout
+
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
         self.aws_region_name = aws_region_name
-        self.use_iam_auth = use_iam_auth
+
         self.conn = None
 
         try:
             self.connect_database(database_name=self.database_name, create_if_not_exists=False)
         except Exception as e:
-            print(f"DatabasePostgreSQL >> Auto-connect to '{self.database_name}' failed: {e}")
-            print(f"DatabasePostgreSQL >> Use ``self.connect_database()`` to create a database.")
+            print(f"DatabasePostgreSQL >> Auto-connect to '{self.database_name}' failed, make sure the schema and user exist: {e}")
+        
+        return None
+    
 
-    def _get_connection_params(self, database_name: Optional[str] = None):
-        """
-        Prepares connection parameters based on the connection type.
-        """
-        params = {
-            'host': self.host,
-            'user': self.user,
-            'password': self.password,
-            'dbname': database_name or self.database_name,
-            'port': self.port,
-            'connect_timeout': self.connection_timeout
-        }
-
-        # Add SSL parameters if specified
-        if self.ssl_mode:
-            params['sslmode'] = self.ssl_mode
-        if self.ssl_root_cert:
-            params['sslrootcert'] = self.ssl_root_cert
-
-        # Handle AWS IAM authentication if enabled
-        if self.use_iam_auth and self.aws_access_key_id and self.aws_secret_access_key and self.aws_region_name:
-            try:
-                client = boto3.client('rds', 
-                                      aws_access_key_id=self.aws_access_key_id, 
-                                      aws_secret_access_key=self.aws_secret_access_key, 
-                                      region_name=self.aws_region_name)
-                token = client.generate_db_auth_token(
-                    DBHostname=self.host,
-                    Port=int(self.port), 
-                    DBUsername=self.user,
-                    Region=self.aws_region_name
+    def _create_iam_user(self, user: str, database_name: str):
+        """Create a database user with IAM authentication. The user should match an existing IAM user with RDS permissions."""
+        try:
+            with self.conn.cursor() as cursor:
+                # Check if user exists
+                cursor.execute(
+                    "SELECT EXISTS(SELECT 1 FROM pg_roles WHERE rolname = %s)",
+                    (user,)
                 )
-                params['password'] = token
-                # For Aurora Serverless, we need to ensure SSL is enabled
-                if 'sslmode' not in params:
-                    params['sslmode'] = 'require'
+                user_exists = cursor.fetchone()[0]
 
-            except Exception as e:
-                print(f"DatabasePostgreSQL >> Error generating AWS auth token: {e}")
-                return {}
+                if not user_exists:
+                    cursor.execute(
+                        sql.SQL("DatabasePostgreSQL >> CREATE USER {} WITH LOGIN").format(sql.Identifier(user))
+                    )
+                    cursor.execute(
+                        sql.SQL("DatabasePostgreSQL >> GRANT rds_iam TO {}").format(sql.Identifier(user))
+                    )
+                    print(f"DatabasePostgreSQL >> User '{user}' created with IAM authentication")
+                else:
+                    print(f"DatabasePostgreSQL >> User '{user}' already exists")
 
-        return params
+                cursor.execute(
+                    sql.SQL("GRANT ALL PRIVILEGES ON SCHEMA {} TO {}").format(
+                        sql.Identifier(database_name),
+                        sql.Identifier(user)
+                    )
+                )
+                cursor.execute(
+                    sql.SQL("ALTER USER {} SET search_path TO {}").format(
+                        sql.Identifier(user),
+                        sql.Identifier(database_name)
+                    )
+                )
+                cursor.execute(
+                    sql.SQL("GRANT USAGE ON SCHEMA public TO {}").format(
+                        sql.Identifier(user)
+                    )
+                )
+                print(f"DatabasePostgreSQL >> Granted privileges on schema '{database_name}' to user '{user}'")
+
+        except Exception as e:
+            print(f"DatabasePostgreSQL >> Error creating IAM user: {e}")
+
+        return None
 
 
-    def connect_database(self, database_name: str = None, create_if_not_exists: bool = True):
+    def connect_database(self, database_name: Optional[str] = None, create_if_not_exists: bool = False):
         """
-        Connects to a PostgreSQL database (standard, Aurora, or RDS).
+        Connects to a PostgreSQL database (schema). This is also used to create a database (schema) and use it directly.
+
+        Parameters
+        ----------
+        database_name: Optional[str] 
+            Overwrites the ``__init__`` database name. Also use this name when creating a new schema.
+        create_if_not_exists: bool
+            Whereas creating said schema or not (does nothing if the schema already exist).
+
+        Note
+        ----
+        - Connection will instantiate a connector object: ``self.conn``.
         """
+        
+        def _get_connection_params():
+            """
+            Prepares connection parameters based on the connection type.
+            """
+            params = {
+                'host': self.host,
+                'user': self.user,
+                'password': self.password,
+                'dbname': self.database_name,
+                'port': self.port,
+                'connect_timeout': self.connection_timeout
+            }
+
+            if self.ssl_mode:
+                params['sslmode'] = self.ssl_mode
+
+            # No password assume an IAM connection
+            if self.password is None:
+                try:
+                    client = boto3.client('rds', 
+                                        aws_access_key_id=self.aws_access_key_id, 
+                                        aws_secret_access_key=self.aws_secret_access_key, 
+                                        region_name=self.aws_region_name)
+                    token = client.generate_db_auth_token(
+                        DBHostname=self.host,
+                        Port=int(self.port), 
+                        DBUsername=self.user, # IAM User
+                        Region=self.aws_region_name
+                    )
+                    params['password'] = token
+                    # For Aurora Serverless, SSL is mandatory
+                    if 'sslmode' not in params:
+                        params['sslmode'] = 'require'
+
+                except Exception as e:
+                    print(f"DatabasePostgreSQL >> Error generating AWS auth token: {e}")
+                    return {}
+
+            return params
+
         if database_name:
             self.database_name = database_name.lower()
 
         try:
-            connection_params = self._get_connection_params(self.database_name)
+            connection_params = _get_connection_params()
             self.conn = psycopg2.connect(**connection_params)
             print(f"DatabasePostgreSQL >> Connected to database schema '{self.database_name}'.")
 
@@ -159,7 +213,7 @@ class DatabasePostgreSQL(Database):
         return None
     
 
-    def create_database(self, database_name):
+    def create_database(self, database_name: str = None):
         """
         Creates a PostgreSQL database if it doesn't exist.
         """

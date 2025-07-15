@@ -14,13 +14,6 @@ class Database(ABC):
         """
         super().__init__()
 
-        # TODO: Add connection certificate
-
-        # Note:
-        # The authentication credentials above are required to connect to Elasticsearch.
-        # When connecting to Kibana server, custom users credentials should be used. They can be created from withing the Kibana server
-        # interface, through the elastic superuser account (which are actually the credentials used above: ELASTIC_USERNAME, ELASTIC_PASSWORD)
-
         return None
 
 
