@@ -388,6 +388,104 @@ class DatabasePostgreSQL(Database):
             return []
 
 
+    def list_schemas(self, 
+                     include_system_schemas: bool = False, 
+                     display: bool = False, 
+                     detailed: bool = False):
+        """
+        Lists all schemas in the specified database or in the currently connected database.
+
+        Parameters
+        ----------
+        include_system_schemas: bool, default=False
+            Whether to include system schemas (pg_*, information_schema) in the results.
+        display: bool, default=False
+            Whether to print the list of schemas.
+        detailed: bool, default=False
+            Whether to return detailed information about each schema including owner and description.
+
+        Returns
+        -------
+        list
+            If detailed=False: A list of schema names.
+            If detailed=True: A list of dictionaries with schema details.
+        """
+        try:
+
+            cursor = self.conn.cursor()
+
+            # Build the query based on whether to include system schemas and detail level
+            if detailed:
+                query = """
+                SELECT 
+                    n.nspname AS schema_name,
+                    u.usename AS owner,
+                    pg_catalog.obj_description(n.oid, 'pg_namespace') AS description,
+                    pg_catalog.pg_size_pretty(
+                        SUM(pg_catalog.pg_total_relation_size(c.oid))::BIGINT
+                    ) AS size
+                FROM pg_catalog.pg_namespace n
+                JOIN pg_catalog.pg_user u ON n.nspowner = u.usesysid
+                LEFT JOIN pg_catalog.pg_class c ON n.oid = c.relnamespace
+                """
+
+                if not include_system_schemas:
+                    query += """
+                    WHERE n.nspname NOT LIKE 'pg_%' 
+                    AND n.nspname != 'information_schema'
+                    """
+
+                query += """
+                GROUP BY n.nspname, u.usename, n.oid
+                ORDER BY n.nspname;
+                """
+            else:
+                if include_system_schemas:
+                    query = "SELECT schema_name FROM information_schema.schemata ORDER BY schema_name;"
+                else:
+                    query = """
+                    SELECT schema_name 
+                    FROM information_schema.schemata 
+                    WHERE schema_name NOT LIKE 'pg_%' 
+                    AND schema_name != 'information_schema'
+                    ORDER BY schema_name;
+                    """
+
+            cursor.execute(query)
+            results = cursor.fetchall()
+
+            if detailed:
+                schemas_list = [
+                    {
+                        'name': row[0],
+                        'owner': row[1],
+                        'description': row[2] if row[2] else '',
+                        'size': row[3] if row[3] else '0 bytes'
+                    }
+                    for row in results
+                ]
+
+                if display:
+                    print(f"\nDatabasePostgreSQL >> Schemas in database:")
+                    print(f"{'Schema Name':<30} {'Owner':<15} {'Size':<10} {'Description':<30}")
+                    print("-" * 85)
+                    for schema in schemas_list:
+                        print(f"{schema['name']:<30} {schema['owner']:<15} {schema['size']:<10} {schema['description']:<30}")
+            else:
+                schemas_list = [schema[0] for schema in results]
+
+                if display:
+                    print(f"DatabasePostgreSQL >> Schemas in database:", schemas_list)
+
+            cursor.close()
+
+            return schemas_list
+
+        except Exception as e:
+            print(f"DatabasePostgreSQL >> PostgreSQL error when listing schemas: {e}")
+            return []
+                
+        
     def list_tables(self, display: bool = False):
         """
         Lists all tables in the current PostgreSQL schema.
