@@ -41,8 +41,8 @@ if "aws" in sys.argv:
                             aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
                             aws_secret_access_key=os.getenv("AWS_ACCESS_KEY_SECRET"))
     db.list_tables(display=True)
-    db.create_table(table_name="demo", column_definitions=["id_index", "value_column"])
+    db.create_table(table_name="demo", column_definitions=["id SERIAL PRIMARY KEY", "name VARCHAR(100) NOT NULL"])
     db.list_tables(display=True)
-    db.send_data(table_name="demo", id_index=12, value_column="this is a string")
+    db.send_data(table_name="demo", id=12, name="this is a string")
     print(db.query_data(SELECT="*", FROM="demo"))
 

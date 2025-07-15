@@ -288,7 +288,6 @@ class DatabasePostgreSQL(Database):
             True if table was created or already exists and is accessible, False otherwise
         """
 
-        # Ensure schema_name is not None
         if self.schema_name is None:
             self.schema_name = 'public'
 
@@ -296,11 +295,9 @@ class DatabasePostgreSQL(Database):
             with self.conn.cursor() as cursor:
                 full_table_name = f"{self.schema_name}.{table_name}"
 
-                # Create the table with explicit schema reference
                 create_table_sql = f"CREATE TABLE IF NOT EXISTS {full_table_name} ({', '.join(column_definitions)})"
                 cursor.execute(create_table_sql)
 
-                # Verify the table was created and is accessible
                 cursor.execute(f"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = %s AND table_name = %s)", 
                             (self.schema_name, table_name))
                 table_exists = cursor.fetchone()[0]
