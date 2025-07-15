@@ -223,7 +223,7 @@ class DatabasePostgreSQL(Database):
 
         # Update schema name if provided
         if schema_name:
-            self.schema_name = schema_name.lower()
+            self.schema_name = schema_name.lower().replace("-", "_").replace(" ", "_")
 
         try:
             # Connect and use schema (creates it if create_if_not_exists)
