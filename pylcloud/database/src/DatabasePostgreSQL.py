@@ -288,9 +288,6 @@ class DatabasePostgreSQL(Database):
             True if table was created or already exists and is accessible, False otherwise
         """
 
-        if self.schema_name is None:
-            self.schema_name = 'public'
-
         try:
             with self.conn.cursor() as cursor:
                 full_table_name = f"{self.schema_name}.{table_name}"
@@ -476,20 +473,17 @@ class DatabasePostgreSQL(Database):
         """
         try:
 
-            if self.schema_name is None:
-                schema_name = 'public'
-
             cursor = self.conn.cursor()
 
             cursor.execute("""
                 SELECT EXISTS(
                     SELECT 1 FROM information_schema.schemata WHERE schema_name = %s
                 );
-            """, (schema_name,))
+            """, (self.schema_name,))
             schema_exists = cursor.fetchone()[0]
 
             if not schema_exists:
-                print(f"DatabasePostgreSQL >> Schema '{schema_name}' does not exist.")
+                print(f"DatabasePostgreSQL >> Schema '{self.schema_name}' does not exist.")
                 return []
 
             cursor.execute("""
@@ -497,15 +491,15 @@ class DatabasePostgreSQL(Database):
                 FROM information_schema.tables 
                 WHERE table_schema = %s
                 ORDER BY table_name;
-            """, (schema_name,))
+            """, (self.schema_name,))
 
             tables_list = [row[0] for row in cursor.fetchall()]
 
             if display:
                 if tables_list:
-                    print(f"DatabasePostgreSQL >> Tables in '{schema_name}': {', '.join(tables_list)}")
+                    print(f"DatabasePostgreSQL >> Tables in '{self.schema_name}': {', '.join(tables_list)}")
                 else:
-                    print(f"DatabasePostgreSQL >> No tables found in schema '{schema_name}'.")
+                    print(f"DatabasePostgreSQL >> No tables found in schema '{self.schema_name}'.")
 
             cursor.close()
             return tables_list
