@@ -3,64 +3,152 @@ import psycopg2
 from psycopg2 import sql, OperationalError, errors
 from typing import Union, Optional
 import json
+import boto3
 
 from .Database import Database
 
-
 class DatabasePostgreSQL(Database):
     """
-    A parent class that manages the global PostgreSQL database server.
+    A parent class that manages PostgreSQL database connections,
+    compatible with standard PostgreSQL, AWS Aurora PostgreSQL, and AWS RDS PostgreSQL.
     """
     def __init__(self,
-                 database_name="my_db",
-                 host="127.0.0.1",
-                 user="admin",
-                 password="password",
-                 port="5432"
+                 database_name: str = "my_db",
+                 host: str = "127.0.0.1",
+                 user: str = "admin",
+                 password: str = "password",
+                 port: str = "5432",
+                 ssl_mode: Optional[str] = None,
+                 ssl_root_cert: Optional[str] = None,
+                 connection_timeout: int = 30,
+                 aws_access_key_id: Optional[str] = None,
+                 aws_secret_access_key: Optional[str] = None,
+                 aws_region_name: Optional[str] = None,
+                 use_iam_auth: bool = False
                  ) -> None:
+        """
+        A high-level interface for PostgreSQL server database, compatible with standard PostgreSQL, 
+        AWS Aurora PostgreSQL, and AWS RDS PostgreSQL.
+
+        Parameters
+        ----------
+        database_name: str
+            The name of the database (schema) to connect to.
+        host: str
+            The host/address of the database server.
+            - When connecting to a local server, the IP of host computer
+            - When connecting to AWS, the address of the read/write endpoint
+        user: str
+            The user to assume when interacting with the DB
+        password: str
+            The password for the database user (not used if IAM authentication is enabled)
+        port: str
+            The port number for the database connection
+        ssl_mode: Optional[str]
+            SSL mode for the connection (e.g., 'require', 'verify-ca', 'verify-full')
+        ssl_root_cert: Optional[str]
+            Path to the SSL root certificate
+        connection_timeout: int
+            Connection timeout in seconds
+        aws_access_key_id: Optional[str]
+            AWS access key ID for IAM authentication
+        aws_secret_access_key: Optional[str]
+            AWS secret access key for IAM authentication
+        aws_region_name: Optional[str]
+            AWS region name for IAM authentication
+        use_iam_auth: bool
+            Whether to use IAM authentication for AWS RDS/Aurora
+        """
         super().__init__()
 
+        # Standard PostgreSQL connection information
         self.database_name = database_name.lower()
         self.host = host
         self.user = user
         self.password = password
         self.port = port
+        self.ssl_mode = ssl_mode
+        self.ssl_root_cert = ssl_root_cert
+        self.connection_timeout = connection_timeout
+        self.aws_access_key_id = aws_access_key_id
+        self.aws_secret_access_key = aws_secret_access_key
+        self.aws_region_name = aws_region_name
+        self.use_iam_auth = use_iam_auth
+        self.conn = None
 
         try:
             self.connect_database(database_name=self.database_name, create_if_not_exists=False)
-        except:
-            print(f"DatabasePostgreSQL >> Auto-connect to '{self.database_name}' failed. Use ``self.connect_database()`` to create a database.")
-    
-        return None
+        except Exception as e:
+            print(f"DatabasePostgreSQL >> Auto-connect to '{self.database_name}' failed: {e}")
+            print(f"DatabasePostgreSQL >> Use ``self.connect_database()`` to create a database.")
+
+    def _get_connection_params(self, database_name: Optional[str] = None):
+        """
+        Prepares connection parameters based on the connection type.
+        """
+        params = {
+            'host': self.host,
+            'user': self.user,
+            'password': self.password,
+            'dbname': database_name or self.database_name,
+            'port': self.port,
+            'connect_timeout': self.connection_timeout
+        }
+
+        # Add SSL parameters if specified
+        if self.ssl_mode:
+            params['sslmode'] = self.ssl_mode
+        if self.ssl_root_cert:
+            params['sslrootcert'] = self.ssl_root_cert
+
+        # Handle AWS IAM authentication if enabled
+        if self.use_iam_auth and self.aws_access_key_id and self.aws_secret_access_key and self.aws_region_name:
+            try:
+                client = boto3.client('rds', 
+                                      aws_access_key_id=self.aws_access_key_id, 
+                                      aws_secret_access_key=self.aws_secret_access_key, 
+                                      region_name=self.aws_region_name)
+                token = client.generate_db_auth_token(
+                    DBHostname=self.host,
+                    Port=int(self.port), 
+                    DBUsername=self.user,
+                    Region=self.aws_region_name
+                )
+                params['password'] = token
+                # For Aurora Serverless, we need to ensure SSL is enabled
+                if 'sslmode' not in params:
+                    params['sslmode'] = 'require'
+
+            except Exception as e:
+                print(f"DatabasePostgreSQL >> Error generating AWS auth token: {e}")
+                return {}
+
+        return params
 
 
-    def connect_database(self, database_name: str = "my_db", create_if_not_exists: bool = True):
+    def connect_database(self, database_name: str = None, create_if_not_exists: bool = True):
         """
-        Connects to a PostgreSQL database.
+        Connects to a PostgreSQL database (standard, Aurora, or RDS).
         """
-        self.database_name = database_name
+        if database_name:
+            self.database_name = database_name.lower()
 
         try:
-            self.conn = psycopg2.connect(
-                host=self.host,
-                user=self.user,
-                password=self.password,
-                dbname=self.database_name,
-                port=self.port
-            )
-            print(f"DatabasePostgreSQL >> Connected to database schema '{database_name}'.")
+            connection_params = self._get_connection_params(self.database_name)
+            self.conn = psycopg2.connect(**connection_params)
+            print(f"DatabasePostgreSQL >> Connected to database schema '{self.database_name}'.")
 
-        except OperationalError as e:
+        except psycopg2.OperationalError as e:
             if 'does not exist' in str(e):
-                print(f"DatabasePostgreSQL >> Database schema '{database_name}' does not exist.")
+                print(f"DatabasePostgreSQL >> Database schema '{self.database_name}' does not exist.")
             else:
                 print(f"DatabasePostgreSQL >> Connection error: {e}")
 
             if create_if_not_exists:
-                print(f"DatabasePostgreSQL >> Trying to create database schema '{database_name}' instead.")
+                print(f"DatabasePostgreSQL >> Trying to create database schema '{self.database_name}' instead.")
                 try:
-                    self.create_database(database_name)
-                    print(f"DatabasePostgreSQL >> Connected to database schema '{database_name}'.")
+                    self.create_database(self.database_name)
+                    print(f"DatabasePostgreSQL >> Connected to database schema '{self.database_name}'.")
                 except Exception as e:
                     print(f"DatabasePostgreSQL >> Could not connect to database host, program interrupted: {e}")
                     return sys.exit(1)
@@ -69,33 +157,39 @@ class DatabasePostgreSQL(Database):
                 return sys.exit(1)
 
         return None
-
+    
 
     def create_database(self, database_name):
         """
         Creates a PostgreSQL database if it doesn't exist.
         """
         try:
-            conn = psycopg2.connect(
-                host=self.host,
-                user=self.user,
-                password=self.password,
-                dbname='postgres',
-                port=self.port
-            )
-            conn.autocommit = True
-            cursor = conn.cursor()
-            cursor.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database_name)))
+
+            self.conn.autocommit = True
+            cursor = self.conn.cursor()
+
+            # Check if database exists first (safer for AWS environments)
+            cursor.execute("SELECT 1 FROM pg_database WHERE datname = %s", (database_name,))
+            exists = cursor.fetchone()
+
+            if not exists:
+                cursor.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database_name)))
+                print(f"DatabasePostgreSQL >> Database '{database_name}' created successfully.")
+            else:
+                print(f"DatabasePostgreSQL >> Database '{database_name}' already exists.")
+
             cursor.close()
-            conn.close()
-            print(f"DatabasePostgreSQL >> Database '{database_name}' created successfully.")
-            self.connect_database(database_name)
+            self.conn.close()
+
+            # Connect to the newly created or existing database
+            self.connect_database(database_name, create_if_not_exists=False)
+
         except Exception as e:
             print(f"DatabasePostgreSQL >> Error creating database: {e}")
             sys.exit(1)
 
         return None
-
+    
 
     def create_table(self, table_name: str, column_definitions: list[str]):
         """
