@@ -459,23 +459,61 @@ class DatabasePostgreSQL(Database):
             print(f"DatabasePostgreSQL >> PostgreSQL error when listing schemas: {e}")
             return []
                 
-        
+
     def list_tables(self, display: bool = False):
         """
-        Lists all tables in the current PostgreSQL schema.
+        Lists all tables in the specified PostgreSQL schema or the current schema.
+
+        Parameters
+        ----------
+        display: bool, default=False
+            Whether to print the list of tables.
+
+        Returns
+        -------
+        list
+            A list of table names.
         """
         try:
+
+            if self.schema_name is None:
+                schema_name = 'public'
+
             cursor = self.conn.cursor()
-            cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';")
+
+            cursor.execute("""
+                SELECT EXISTS(
+                    SELECT 1 FROM information_schema.schemata WHERE schema_name = %s
+                );
+            """, (schema_name,))
+            schema_exists = cursor.fetchone()[0]
+
+            if not schema_exists:
+                print(f"DatabasePostgreSQL >> Schema '{schema_name}' does not exist.")
+                return []
+
+            cursor.execute("""
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = %s
+                ORDER BY table_name;
+            """, (schema_name,))
+
             tables_list = [row[0] for row in cursor.fetchall()]
+
             if display:
-                print(f"DatabasePostgreSQL >> Tables in '{self.schema_name}': {', '.join(tables_list)}")
+                if tables_list:
+                    print(f"DatabasePostgreSQL >> Tables in '{schema_name}': {', '.join(tables_list)}")
+                else:
+                    print(f"DatabasePostgreSQL >> No tables found in schema '{schema_name}'.")
+
             cursor.close()
             return tables_list
+
         except Exception as e:
             print(f"DatabasePostgreSQL >> PostgreSQL error when listing tables: {e}")
             return []
-
+        
 
     def query_data(self,
                    SELECT: str,
