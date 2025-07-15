@@ -21,7 +21,7 @@ if "local" in sys.argv:
     # db.execute_file(file_path=os.path.join(os.path.dirname(__file__), "postgres_setup.sql"))
 
 if "aws" in sys.argv:
-    db = DatabasePostgreSQL(schema_name=os.getenv("RDS_DBNAME"),
+    db = DatabasePostgreSQL(schema_name=os.getenv("RDS_SCHEMA"),
                             host=os.getenv("RDS_HOST"),
                             user=os.getenv("RDS_USER"),
                             password=os.getenv("RDS_PASSWORD"),
