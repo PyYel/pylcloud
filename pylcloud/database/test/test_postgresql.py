@@ -42,6 +42,6 @@ if "aws" in sys.argv:
     db.list_tables(display=True)
     db.create_table(table_name="demo", column_definitions=["id_index", "value_column"])
     db.list_tables(display=True)
-    db.send_data(table_name="demo", kwargs={"id_index": 12, "value_column": "this is a string"})
+    db.send_data(table_name="demo", id_index=12, value_column="this is a string")
     print(db.query_data(SELECT="*", FROM="demo"))
 
