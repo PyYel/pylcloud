@@ -2,6 +2,7 @@ import os, sys
 import psycopg2
 from psycopg2 import sql, OperationalError, errors
 from psycopg2._psycopg import connection
+from psycopg2.extras import DictCursor
 from typing import Union, Optional
 import json
 import boto3
@@ -538,7 +539,7 @@ class DatabasePostgreSQL(Database):
             The rows retrieved from the table as a list of dictionaries.
         """
         try:
-            cursor = self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+            cursor = self.conn.cursor(cursor_factory=DictCursor)
 
             # Basic SELECT
             if (SELECT is not None) and (WHERE is None) and (VALUES is None) and (LIKE is None):
