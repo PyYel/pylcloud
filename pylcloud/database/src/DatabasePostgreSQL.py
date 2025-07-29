@@ -1,6 +1,7 @@
 import os, sys
 import psycopg2
 from psycopg2 import sql, OperationalError, errors
+from psycopg2._psycopg import connection
 from typing import Union, Optional
 import json
 import boto3
@@ -83,7 +84,7 @@ class DatabasePostgreSQL(Database):
         self.aws_secret_access_key = aws_secret_access_key
         self.aws_region_name = aws_region_name
 
-        self.conn = None
+        self.conn: connection = None
 
         try:
             self.connect_database(schema_name=self.schema_name, create_if_not_exists=False)
@@ -507,7 +508,7 @@ class DatabasePostgreSQL(Database):
         except Exception as e:
             print(f"DatabasePostgreSQL >> PostgreSQL error when listing tables: {e}")
             return []
-        
+            
 
     def query_data(self,
                    SELECT: str,
@@ -517,40 +518,63 @@ class DatabasePostgreSQL(Database):
                    LIKE: Optional[tuple[str, Union[str, float, int]]] = None):
         """
         Selects data from a PostgreSQL table with optional filtering.
+
+        Parameters
+        ----------
+        SELECT: str
+            The columns to select in SQL syntax.
+        FROM: str
+            The name of the table to select data from.
+        WHERE: Optional[str]
+            The column name for the WHERE condition.
+        VALUES: Optional[tuple]
+            The values to use for exact matching in the WHERE condition.
+        LIKE: Optional[tuple]
+            The pattern to use for LIKE matching in the WHERE condition.
+
+        Returns
+        -------
+        rows: list[dict]
+            The rows retrieved from the table as a list of dictionaries.
         """
         try:
-            cursor = self.conn.cursor()
+            cursor = self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
             # Basic SELECT
             if (SELECT is not None) and (WHERE is None) and (VALUES is None) and (LIKE is None):
                 cursor.execute(f"SELECT {SELECT} FROM {FROM};")
-                rows = cursor.fetchall()
+                rows = [dict(row) for row in cursor.fetchall()]
                 cursor.close()
                 return rows
 
             # WHERE exact match
             if (SELECT is not None) and (WHERE is not None) and (VALUES is not None) and (LIKE is None):
-                format_strings = ','.join(['%s'] * len(VALUES))
+                format_strings = ','.join(['%s'] * len(VALUES)) if isinstance(VALUES, tuple) else '%s'
                 sql_query = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE}=({format_strings});"
-                cursor.execute(sql_query, VALUES)
-                rows = cursor.fetchall()
+                cursor.execute(sql_query, VALUES if isinstance(VALUES, tuple) else (VALUES,))
+                rows = [dict(row) for row in cursor.fetchall()]
                 cursor.close()
                 return rows
 
             # WHERE LIKE pattern
             if (SELECT is not None) and (WHERE is not None) and (LIKE is not None):
                 sql_query = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} LIKE %s;"
-                cursor.execute(sql_query, LIKE)
-                rows = cursor.fetchall()
+                cursor.execute(sql_query, (LIKE,) if not isinstance(LIKE, tuple) else LIKE)
+                rows = [dict(row) for row in cursor.fetchall()]
                 cursor.close()
                 return rows
 
             cursor.close()
             return []
-        except Exception as e:
+        
+        except psycopg2.Error as e:
             print(f"DatabasePostgreSQL >> PostgreSQL error when selecting data: {e}")
             return []
-
+        
+        except Exception as e:
+            print(f"DatabasePostgreSQL >> Unexpected error when selecting data: {e}")
+            return []
+        
 
     def send_data(self, table_name: str, **kwargs):
         """
