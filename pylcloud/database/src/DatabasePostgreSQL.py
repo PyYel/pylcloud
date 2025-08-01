@@ -257,7 +257,7 @@ class DatabasePostgreSQL(Database):
                     else:
                         print(f"DatabasePostgreSQL >> Schema '{self.schema_name}' does not exist and create_if_not_exists=False.")
                         self.conn.close()
-                        return sys.exit(1)
+                        return None
 
                 # Set the search path to the specified schema
                 cursor.execute(f"SET search_path TO {self.schema_name}, public;")
