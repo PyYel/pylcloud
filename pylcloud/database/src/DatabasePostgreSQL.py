@@ -1,7 +1,9 @@
 import os, sys
 import psycopg2
 from psycopg2 import sql, OperationalError, errors
-from typing import Union, Optional
+from psycopg2._psycopg import connection
+from psycopg2.extras import DictCursor
+from typing import Union, Optional, Any
 import json
 import boto3
 import psycopg2._psycopg
@@ -512,48 +514,92 @@ class DatabasePostgreSQL(Database):
         except Exception as e:
             print(f"DatabasePostgreSQL >> PostgreSQL error when listing tables: {e}")
             return []
-        
+            
 
     def query_data(self,
-                   SELECT: str,
-                   FROM: str,
-                   WHERE: Optional[str] = None,
-                   VALUES: Optional[tuple[str, Union[str, float, int]]] = None,
-                   LIKE: Optional[tuple[str, Union[str, float, int]]] = None):
+                SELECT: str,
+                FROM: str,
+                WHERE: Optional[Union[str, list[str], tuple[str]]] = None,
+                VALUES: Optional[Union[Any, list[Any], tuple[Any]]] = None,
+                LIKE: Optional[Union[str, list[str], tuple[Any]]] = None):
         """
         Selects data from a PostgreSQL table with optional filtering.
+
+        Parameters
+        ----------
+        SELECT: str
+            The columns to select in SQL syntax.
+        FROM: str
+            The name of the table to select data from.
+        WHERE: Optional[str or list]
+            The column name(s) for the WHERE condition.
+        VALUES: Optional[Any or list]
+            The value(s) to use for exact matching in the WHERE condition.
+        LIKE: Optional[str or list]
+            The pattern(s) to use for LIKE matching in the WHERE condition.
+
+        Returns
+        -------
+        rows: list[dict]
+            The rows retrieved from the table as a list of dictionaries.
         """
         try:
-            cursor = self.conn.cursor()
+            cursor = self.conn.cursor(cursor_factory=DictCursor)
 
             # Basic SELECT
-            if (SELECT is not None) and (WHERE is None) and (VALUES is None) and (LIKE is None):
+            if WHERE is None:
+
                 cursor.execute(f"SELECT {SELECT} FROM {FROM};")
-                rows = cursor.fetchall()
+                rows = [dict(row) for row in cursor.fetchall()]
+
                 cursor.close()
                 return rows
 
             # WHERE exact match
-            if (SELECT is not None) and (WHERE is not None) and (VALUES is not None) and (LIKE is None):
-                format_strings = ','.join(['%s'] * len(VALUES))
-                sql_query = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE}=({format_strings});"
-                cursor.execute(sql_query, VALUES)
-                rows = cursor.fetchall()
+            if VALUES is not None:
+
+                where_cols = [WHERE] if isinstance(WHERE, str) else WHERE
+                values = [VALUES] if not isinstance(VALUES, (list, tuple)) else VALUES
+                if len(where_cols) != len(values):
+                    print("DatabasePostgreSQL >> Number of WHERE columns must match number of LIKE patterns.")
+                    cursor.close()
+                    return []
+
+                where_clause = " AND ".join([f"{col} = %s" for col in where_cols])
+                sql_query = f"SELECT {SELECT} FROM {FROM} WHERE {where_clause};"
+                cursor.execute(sql_query, values)
+                rows = [dict(row) for row in cursor.fetchall()]
+
                 cursor.close()
                 return rows
 
             # WHERE LIKE pattern
-            if (SELECT is not None) and (WHERE is not None) and (LIKE is not None):
-                sql_query = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} LIKE %s;"
-                cursor.execute(sql_query, LIKE)
-                rows = cursor.fetchall()
+            if LIKE is not None:
+
+                where_cols = [WHERE] if isinstance(WHERE, str) else WHERE
+                like_patterns = [LIKE] if not isinstance(LIKE, (list, tuple)) else LIKE
+                if len(where_cols) != len(like_patterns):
+                    print("DatabasePostgreSQL >> Number of WHERE columns must match number of LIKE patterns.")
+                    cursor.close()
+                    return []
+
+                where_clause = " AND ".join([f"{col} LIKE %s" for col in where_cols])
+                sql_query = f"SELECT {SELECT} FROM {FROM} WHERE {where_clause};"
+                cursor.execute(sql_query, like_patterns)
+                rows = [dict(row) for row in cursor.fetchall()]
+
                 cursor.close()
                 return rows
 
             cursor.close()
             return []
-        except Exception as e:
+
+        except psycopg2.Error as e:
             print(f"DatabasePostgreSQL >> PostgreSQL error when selecting data: {e}")
+            return []
+
+        except Exception as e:
+            print(f"DatabasePostgreSQL >> Unexpected error when selecting data: {e}")
             return []
 
 
