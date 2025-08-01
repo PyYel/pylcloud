@@ -243,8 +243,6 @@ class DatabasePostgreSQL(Database):
         try:
             # Connect and use schema (creates it if create_if_not_exists)
             connection_params = _get_connection_params()
-            print(connection_params["password"])
-            # sys.exit()
             self.conn = psycopg2.connect(**connection_params)
 
             with self.conn.cursor() as cursor:
