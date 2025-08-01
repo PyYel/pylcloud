@@ -53,7 +53,7 @@ class Database(ABC):
                 console_handler.setLevel(logging._nameToLevel[logs_level])
                 console_handler.setFormatter(formatter)
                 self.logger.addHandler(console_handler)
-                self.logger.info("Logging handler configured for file output.")
+                self.logger.info("Logging handler configured for console output.")
 
             if "file" in logs_output:
                 file_handler = logging.FileHandler(os.path.join(logs_dir, f"{datetime.now().strftime('%H-%M-%S')}-app.log"))

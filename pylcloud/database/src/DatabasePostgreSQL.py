@@ -91,7 +91,7 @@ class DatabasePostgreSQL(Database):
         try:
             self.connect_database(schema_name=self.schema_name, create_if_not_exists=False)
         except Exception as e:
-            print(f"DatabasePostgreSQL >> Auto-connect to '{self.schema_name}' failed, make sure the schema and user exist: {e}")
+            self.logger.error(f"Auto-connect to '{self.schema_name}' failed, make sure the schema and user exist: {e}")
         
         return None
     
@@ -128,9 +128,9 @@ class DatabasePostgreSQL(Database):
                     cursor.execute(
                         sql.SQL("GRANT rds_iam TO {}").format(sql.Identifier(user))
                     )
-                    print(f"DatabasePostgreSQL >> User '{user}' created with IAM authentication")
+                    self.logger.info(f"User '{user}' created with IAM authentication")
                 else:
-                    print(f"DatabasePostgreSQL >> User '{user}' already exists")
+                    self.logger.info(f"User '{user}' already exists")
 
                 cursor.execute(
                     sql.SQL("GRANT ALL PRIVILEGES ON SCHEMA {} TO {}").format(
@@ -149,11 +149,11 @@ class DatabasePostgreSQL(Database):
                         sql.Identifier(user)
                     )
                 )
-                self.conn.commit()
-                print(f"DatabasePostgreSQL >> Granted privileges on schema '{self.schema_name}' to user '{user}'. Consider reconnecting to the DB.")
+                self._commit()
+                self.logger.info(f"Granted privileges on schema '{self.schema_name}' to user '{user}'. Consider reconnecting to the DB.")
 
         except Exception as e:
-            print(f"DatabasePostgreSQL >> Error creating IAM user: {e}")
+            self.logger.error(f"Error creating IAM user: {e}")
 
         return None
 
@@ -184,13 +184,13 @@ class DatabasePostgreSQL(Database):
                     # Create schema if it doesn't exist
                     cursor.execute(f"CREATE SCHEMA IF NOT EXISTS {self.schema_name};")
                     self.conn.commit()
-                    print(f"DatabasePostgreSQL >> Schema '{self.schema_name}' created successfully.")
+                    self.logger.info(f"Schema '{self.schema_name}' created successfully.")
 
                     # Set the search path to the new schema
                     cursor.execute(f"SET search_path TO {self.schema_name}, public;")
                     self.conn.commit()
             except Exception as e:
-                print(f"DatabasePostgreSQL >> Error creating schema: {e}")
+                self.logger.error(f"Error creating schema: {e}")
                 raise
 
             return None
@@ -231,7 +231,7 @@ class DatabasePostgreSQL(Database):
                     params['sslmode'] = 'require'
 
                 except Exception as e:
-                    print(f"DatabasePostgreSQL >> Error generating AWS auth token: {e}")
+                    self.logger.error(f"Error generating AWS auth token: {e}")
                     return {}
 
             return params
@@ -252,24 +252,24 @@ class DatabasePostgreSQL(Database):
 
                 if not schema_exists:
                     if create_if_not_exists:
-                        print(f"DatabasePostgreSQL >> Schema '{self.schema_name}' does not exist. Creating it.")
+                        self.logger.info(f"Schema '{self.schema_name}' does not exist. Creating it.")
                         _create_schema()
                     else:
-                        print(f"DatabasePostgreSQL >> Schema '{self.schema_name}' does not exist and create_if_not_exists=False.")
+                        self.logger.warning(f"Schema '{self.schema_name}' does not exist and create_if_not_exists=False.")
                         self.conn.close()
                         return None
 
                 # Set the search path to the specified schema
                 cursor.execute(f"SET search_path TO {self.schema_name}, public;")
-                self.conn.commit()
+                self._commit()
 
-            print(f"DatabasePostgreSQL >> Connected to schema '{self.schema_name}'.")
+            self.logger.info(f"Connected to schema '{self.schema_name}'.")
 
         except psycopg2.OperationalError as e:
-            print(f"DatabasePostgreSQL >> Connection error: {e}")
+            self.logger.critical(f"Connection error: {e}")
             return None
         except Exception as e:
-            print(f"DatabasePostgreSQL >> Unexpected error: {e}")
+            self.logger.critical(f"Unexpected error: {e}")
             return None
 
         return None
@@ -304,18 +304,18 @@ class DatabasePostgreSQL(Database):
                 table_exists = cursor.fetchone()[0]
 
                 if table_exists:
-                    print(f"DatabasePostgreSQL >> Table '{self.schema_name}.{table_name}' successfully created or already exists.")
-                    self.conn.commit()
-                    return True
+                    self.logger.info(f"Table '{self.schema_name}.{table_name}' successfully created or already exists.")
+                    self._commit()
                 else:
-                    print(f"DatabasePostgreSQL >> Failed to create table '{self.schema_name}.{table_name}'.")
-                    return False
+                    self.logger.warning(f"Failed to create table '{self.schema_name}.{table_name}'.")
+                    self._rollback()
 
         except Exception as e:
             self._rollback()
-            print(f"DatabasePostgreSQL >> Error creating table '{table_name}': {e}")
-            return False
-        
+            self.logger.error(f"Error creating table '{table_name}': {e}")
+
+        return None
+
         
     def delete_data(self, FROM: str, WHERE: str, VALUES: tuple[str]):
         """
@@ -326,9 +326,10 @@ class DatabasePostgreSQL(Database):
             format_strings = ','.join(['%s'] * len(VALUES))
             query = f"DELETE FROM {FROM} WHERE {WHERE}=({format_strings});"
             cursor.execute(query, VALUES)
-            self.conn.commit()
+            self._commit()
+            self.logger.debug(query)
         except Exception as e:
-            print(f"DatabasePostgreSQL >> PostgreSQL error when deleting data: {e}")
+            self.logger.error(f"PostgreSQL error when deleting data: {e}")
         finally:
             cursor.close()
 
@@ -341,7 +342,7 @@ class DatabasePostgreSQL(Database):
         """
         if self.conn:
             self.conn.close()
-            print(f"DatabasePostgreSQL >> Disconnected from database schema '{self.schema_name}'.")
+            self.logger.info(f"Disconnected from database schema '{self.schema_name}'.")
 
         return None
 
@@ -354,42 +355,43 @@ class DatabasePostgreSQL(Database):
         try:
             drop_table_query = f"DROP TABLE IF EXISTS {table_name} CASCADE;"
             cursor.execute(drop_table_query)
-            self.conn.commit()
-            print(f"DatabasePostgreSQL >> Successfully dropped table `{table_name}`.")
+            self._commit()
+            self.logger.info(f"Successfully dropped table `{table_name}`.")
         except Exception as e:
-            print(f"DatabasePostgreSQL >> Failed to drop table `{table_name}`: {e}")
+            self.logger.error(f"Failed to drop table `{table_name}`: {e}")
+            self._rollback()
         finally:
             cursor.close()
 
         return None
 
 
-    def drop_database(self, schema_name: str):
+    def drop_schema(self, schema_name: str):
         """
-        Drops the entire PostgreSQL database.
+        Drops a schema from the PostgreSQL database.
         """
         try:
-            if self.conn:
-                self.conn.close()
-
-            conn = psycopg2.connect(
-                host=self.host,
-                user=self.user,
-                password=self.password,
-                dbname='postgres',
-                port=self.port
+            cursor = self.conn.cursor()
+            cursor.execute(
+                sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(sql.Identifier(schema_name))
             )
-            conn.autocommit = True
-            cursor = conn.cursor()
-            cursor.execute(sql.SQL("DROP DATABASE IF EXISTS {}").format(sql.Identifier(schema_name)))
             self._commit()
-            print(f"DatabasePostgreSQL >> Successfully dropped '{schema_name}' database schema.")
             cursor.close()
-            conn.close()
+            self.logger.info(f"Successfully dropped schema '{schema_name}'.")
+
         except Exception as e:
-            print(f"DatabasePostgreSQL >> PostgreSQL error when dropping database schema: {e}")
+            self.logger.error(f"PostgreSQL error when dropping schema: {e}")
+            self._rollback()
 
         return None
+
+
+    def drop_database(self, schema_name: str):
+        """
+        See ``drop_schema()``.
+        """
+        self.logger.debug("Drop database not allowed. Drop schemas instead.")
+        return self.drop_schema(schema_name=schema_name)
 
 
     def list_databases(self, display: bool = False):
@@ -397,23 +399,20 @@ class DatabasePostgreSQL(Database):
         Lists all databases on the server.
         """
         try:
-            conn = psycopg2.connect(
-                host=self.host,
-                user=self.user,
-                password=self.password,
-                dbname='postgres',
-                port=self.port
-            )
-            cursor = conn.cursor()
+
+            cursor = self.conn.cursor()
             cursor.execute("SELECT datname FROM pg_database WHERE datistemplate = false;")
             databases_list = [db[0] for db in cursor.fetchall()]
+
+            self.logger.debug("Available databases:", databases_list)
             if display:
-                print("DatabasePostgreSQL >> Available databases:", databases_list)
+                print("Available databases:", databases_list)
+            
             cursor.close()
-            conn.close()
             return databases_list
+        
         except Exception as e:
-            print(f"DatabasePostgreSQL >> PostgreSQL error when listing databases: {e}")
+            self.logger.error(f"PostgreSQL error when listing databases: {e}")
             return []
 
 
@@ -450,15 +449,15 @@ class DatabasePostgreSQL(Database):
             cursor.execute(query)
             schemas_list = [schema[0] for schema in cursor.fetchall()]
 
+            self.logger.debug(f"Schemas in database:", schemas_list)
             if display:
-                print(f"DatabasePostgreSQL >> Schemas in database:", schemas_list)
+                print(f"Schemas in database:", schemas_list)
 
             cursor.close()
-
             return schemas_list
 
         except Exception as e:
-            print(f"DatabasePostgreSQL >> PostgreSQL error when listing schemas: {e}")
+            self.logger.info(f"PostgreSQL error when listing schemas: {e}")
             return []
                 
 
@@ -488,7 +487,7 @@ class DatabasePostgreSQL(Database):
             schema_exists = cursor.fetchone()[0]
 
             if not schema_exists:
-                print(f"DatabasePostgreSQL >> Schema '{self.schema_name}' does not exist.")
+                self.logger.info(f"Schema '{self.schema_name}' does not exist.")
                 return []
 
             cursor.execute("""
@@ -500,17 +499,18 @@ class DatabasePostgreSQL(Database):
 
             tables_list = [row[0] for row in cursor.fetchall()]
 
+            self.logger.debug(f"Tables in '{self.schema_name}': {', '.join(tables_list)}")
             if display:
                 if tables_list:
-                    print(f"DatabasePostgreSQL >> Tables in '{self.schema_name}': {', '.join(tables_list)}")
+                    print(f"Tables in '{self.schema_name}': {', '.join(tables_list)}")
                 else:
-                    print(f"DatabasePostgreSQL >> No tables found in schema '{self.schema_name}'.")
+                    print(f"No tables found in schema '{self.schema_name}'.")
 
             cursor.close()
             return tables_list
 
         except Exception as e:
-            print(f"DatabasePostgreSQL >> PostgreSQL error when listing tables: {e}")
+            self.logger.error(f"PostgreSQL error when listing tables: {e}")
             return []
             
 
@@ -559,7 +559,7 @@ class DatabasePostgreSQL(Database):
                 where_cols = [WHERE] if isinstance(WHERE, str) else WHERE
                 values = [VALUES] if not isinstance(VALUES, (list, tuple)) else VALUES
                 if len(where_cols) != len(values):
-                    print("DatabasePostgreSQL >> Number of WHERE columns must match number of LIKE patterns.")
+                    self.logger.warning("Number of WHERE columns must match number of LIKE patterns.")
                     cursor.close()
                     return []
 
@@ -577,7 +577,7 @@ class DatabasePostgreSQL(Database):
                 where_cols = [WHERE] if isinstance(WHERE, str) else WHERE
                 like_patterns = [LIKE] if not isinstance(LIKE, (list, tuple)) else LIKE
                 if len(where_cols) != len(like_patterns):
-                    print("DatabasePostgreSQL >> Number of WHERE columns must match number of LIKE patterns.")
+                    self.logger.warning("Number of WHERE columns must match number of LIKE patterns.")
                     cursor.close()
                     return []
 
@@ -593,11 +593,11 @@ class DatabasePostgreSQL(Database):
             return []
 
         except psycopg2.Error as e:
-            print(f"DatabasePostgreSQL >> PostgreSQL error when selecting data: {e}")
+            self.logger.error(f"PostgreSQL error when selecting data: {e}")
             return []
 
         except Exception as e:
-            print(f"DatabasePostgreSQL >> Unexpected error when selecting data: {e}")
+            self.logger.error(f"Unexpected error when selecting data: {e}")
             return []
 
 
@@ -612,11 +612,15 @@ class DatabasePostgreSQL(Database):
             values = tuple(kwargs.values())
 
             cursor.execute(f"INSERT INTO {table_name} ({fields}) VALUES ({placeholders});", values)
+            self.logger.debug(f"INSERT INTO {table_name} ({fields}) VALUES ({values});")
             self._commit()
+
         except AttributeError:
-            print(f"DatabasePostgreSQL >> Connection to the DB is not defined. Try reconnecting to the DB.")
+            self.logger.error(f"Connection to the DB is not defined. Try reconnecting to the DB.")
+
         except Exception as e:
-            print(f"DatabasePostgreSQL >> PostgreSQL error when inserting data into '{table_name}': {e}")
+            self.logger.error(f"PostgreSQL error when inserting data into '{table_name}': {e}")
+
         finally:
             self._rollback()
 
@@ -630,9 +634,9 @@ class DatabasePostgreSQL(Database):
         try:
             self.conn.commit()
         except AttributeError:
-            print("DatabasePostgreSQL >> Connector is not defined. Try reconnecting to the DB.")
+            self.logger.error("Connector is not defined. Try reconnecting to the DB.")
         except:
-            print("DatabasePostgreSQL >> Failed to commit transaction.")
+            self.logger.error("Failed to commit transaction.")
 
         return None
     
@@ -644,9 +648,9 @@ class DatabasePostgreSQL(Database):
         try:
             self.conn.rollback()
         except AttributeError:
-            print("DatabasePostgreSQL >> Connector is not defined. Try reconnecting to the DB.")
+            self.logger.error("Connector is not defined. Try reconnecting to the DB.")
         except:
-            print("DatabasePostgreSQL >> Failed to rollback transaction.")
+            self.logger.error("Failed to rollback transaction.")
 
         return None
 
@@ -664,7 +668,7 @@ class DatabasePostgreSQL(Database):
         import os
 
         if not os.path.isfile(file_path):
-            print(f"DatabasePostgreSQL >> File '{file_path}' does not exist.")
+            self.logger.warning(f"File '{file_path}' does not exist.")
             return None
 
         file_extension = os.path.splitext(file_path)[1]
@@ -677,19 +681,19 @@ class DatabasePostgreSQL(Database):
                     sql_commands = sql_file.read()
                     cursor.execute(sql_commands)
                     self.conn.commit()
-                    print(f"DatabasePostgreSQL >> SQL file '{file_path}' executed successfully.")
+                    self.logger.info(f"SQL file '{file_path}' executed successfully.")
 
             elif file_extension == '.json':
                 with open(file_path, 'r', encoding='utf-8') as json_file:
                     data = json.load(json_file)
 
                 if not isinstance(data, list):
-                    print("DatabasePostgreSQL >> JSON file must contain a list of records (dictionaries).")
+                    self.logger.warning("JSON file must contain a list of records (dictionaries).")
                     return None
 
                 for record in data:
                     if not isinstance(record, dict) or 'table' not in record or 'data' not in record:
-                        print("DatabasePostgreSQL >> JSON format invalid. Each record must contain 'table' and 'data' keys.")
+                        self.logger.warning("JSON format invalid. Each record must contain 'table' and 'data' keys.")
                         return None
 
                     table_name = record['table']
@@ -700,16 +704,13 @@ class DatabasePostgreSQL(Database):
                     cursor.execute(f"INSERT INTO {table_name} ({fields}) VALUES ({placeholders});", values)
 
                 self.conn.commit()
-                print(f"DatabasePostgreSQL >> JSON file '{file_path}' data inserted successfully.")
+                self.logger.info(f"JSON file '{file_path}' data inserted successfully.")
 
             else:
-                print(f"DatabasePostgreSQL >> Unsupported file type '{file_extension}'. Only .sql and .json are supported.")
+                self.logger.warning(f"Unsupported file type '{file_extension}'. Only .sql and .json are supported.")
 
         except psycopg2.Error as e:
-            print(f"DatabasePostgreSQL >> PostgreSQL error when executing file: {e}")
+            self.logger.error(f"PostgreSQL error when executing file: {e}")
             self._rollback()
-
-        finally:
-            cursor.close()
 
         return None
