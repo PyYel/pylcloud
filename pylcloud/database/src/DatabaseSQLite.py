@@ -21,7 +21,7 @@ class DatabaseSQLite(Database):
         database_path: str, '../database.db'
             The path to the SQLite database file. Default path is the current working directory.
         """
-        super().__init__()
+        super().__init__(logs_name="DatabaseSQLite")
         
         self.database_path = database_path
         try:

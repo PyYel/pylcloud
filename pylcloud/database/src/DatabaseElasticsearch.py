@@ -40,7 +40,7 @@ class DatabaseElasticsearch(Database):
         to an Elasticsearch DB, you are directly connected to the cluster. To change of cluster, you should 'reconnect' to the server.
         In the Elasticsearch context, this is more obvious, as two clusters must always be hosted on different ports.
         """
-        super().__init__()
+        super().__init__(logs_name="DatabaseElasticsearch")
 
         self.host = host
         self.user = user
@@ -419,14 +419,14 @@ class DatabaseElasticsearch(Database):
             return []
 
 
-    def commit_transactions(self):
+    def _commit(self):
         """
         Commits the transactions operated since the last commit.
         """
         raise NotImplementedError
 
 
-    def rollback_transactions(self):
+    def _rollback(self):
         """
         roolbacks the transactions operated since the last commit.
         """

@@ -10,7 +10,7 @@ class DatabaseMongoDB(Database):
     MongoDB Python API helper.
     """
     def __init__(self, base_url: str = "http://localhost:9200", username: str = "admin", password: str = "password"):
-        super().__init__()
+        super().__init__(logs_name="DatabaseMongoDB")
 
         # TODO: Add connection certificate
         try:

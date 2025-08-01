@@ -72,7 +72,7 @@ class DatabasePostgreSQL(Database):
         - Database management is a rather uncommon operation. For a more streamlined usage of this helper, management is limited
         to schema level.
         """
-        super().__init__()
+        super().__init__(logs_name="DatabasePostgreSQL")
 
         self.schema_name = schema_name.lower().replace("-", "_").replace(" ", "_")
         self.host = host

@@ -1,18 +1,66 @@
 import os, sys
 import hashlib
+import logging
+from typing import Optional
+from datetime import datetime
 
 from abc import ABC, abstractmethod
 
 
 class Database(ABC):
     """
-    NoSQL databases API helper.
+    Databases API helper.
     """
-    def __init__(self):
+    def __init__(self, logs_name: str):
         """
-        Initializes the helper.
+        Initializes the helper and its logging.
         """
         super().__init__()
+
+        self._config_logger(logs_name=logs_name)
+
+        return None
+
+
+    def _config_logger(self, 
+                       logs_name: str, 
+                       logs_dir: Optional[str] = None, 
+                       logs_level: str = "INFO",
+                       logs_output: list[str] = ["console", "file"]):
+        """
+        Will configure logging accordingly to the plateform the program is running on. This
+        is the default behaviour. See ``custom_config()`` to override the parameters.
+        """
+
+        if logs_dir is None:
+            logs_dir = os.path.join(os.getcwd(), "log", str(datetime.now().strftime("%Y-%m-%d")))
+        os.makedirs(logs_dir, exist_ok=True)
+
+        self.logger = logging.getLogger(logs_name)
+        self.logger.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+        # If a logger already exists, this prevents duplication of the logger handlers
+        if self.logger.hasHandlers():
+            for handler in self.logger.handlers:
+                handler.close()
+
+        # Creates/recreates the handler(s)
+        if not self.logger.hasHandlers():
+
+            if "console" in logs_output:
+                console_handler = logging.StreamHandler()
+                console_handler.setLevel(logging._nameToLevel[logs_level])
+                console_handler.setFormatter(formatter)
+                self.logger.addHandler(console_handler)
+                self.logger.info("Logging handler configured for file output.")
+
+            if "file" in logs_output:
+                file_handler = logging.FileHandler(os.path.join(logs_dir, f"{datetime.now().strftime('%H-%M-%S')}-app.log"))
+                file_handler.setLevel(logging._nameToLevel[logs_level])
+                file_handler.setFormatter(formatter)
+                self.logger.addHandler(file_handler)
+                self.logger.info("Logging handler configured for file output.")
 
         return None
 

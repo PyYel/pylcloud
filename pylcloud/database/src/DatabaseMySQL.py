@@ -44,7 +44,7 @@ class DatabaseMySQL(Database):
             - ``database_name`` refers to the schema.
             - Switching databases requires reconnecting to the server, even if credentials remain unchanged.
         """
-        super().__init__()
+        super().__init__(logs_name="DatabaseMySQL")
         
         self.database_name = database_name.lower()
         self.host = host
