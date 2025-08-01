@@ -4,6 +4,7 @@ from psycopg2 import sql, OperationalError, errors
 from typing import Union, Optional
 import json
 import boto3
+import psycopg2._psycopg
 
 from .Database import Database
 
@@ -83,7 +84,7 @@ class DatabasePostgreSQL(Database):
         self.aws_secret_access_key = aws_secret_access_key
         self.aws_region_name = aws_region_name
 
-        self.conn = None
+        self.conn: psycopg2._psycopg.connection = None # type: ignore
 
         try:
             self.connect_database(schema_name=self.schema_name, create_if_not_exists=False)
@@ -146,6 +147,7 @@ class DatabasePostgreSQL(Database):
                         sql.Identifier(user)
                     )
                 )
+                self.conn.commit()
                 print(f"DatabasePostgreSQL >> Granted privileges on schema '{self.schema_name}' to user '{user}'. Consider reconnecting to the DB.")
 
         except Exception as e:
@@ -223,8 +225,8 @@ class DatabasePostgreSQL(Database):
                     )
                     params['password'] = token
                     # For Aurora Serverless, SSL is mandatory
-                    if 'sslmode' not in params:
-                        params['sslmode'] = 'require'
+                    # if 'sslmode' not in params:
+                    params['sslmode'] = 'require'
 
                 except Exception as e:
                     print(f"DatabasePostgreSQL >> Error generating AWS auth token: {e}")
@@ -239,6 +241,8 @@ class DatabasePostgreSQL(Database):
         try:
             # Connect and use schema (creates it if create_if_not_exists)
             connection_params = _get_connection_params()
+            print(connection_params["password"])
+            # sys.exit()
             self.conn = psycopg2.connect(**connection_params)
 
             with self.conn.cursor() as cursor:
@@ -263,10 +267,10 @@ class DatabasePostgreSQL(Database):
 
         except psycopg2.OperationalError as e:
             print(f"DatabasePostgreSQL >> Connection error: {e}")
-            return sys.exit(1)
+            return None
         except Exception as e:
             print(f"DatabasePostgreSQL >> Unexpected error: {e}")
-            return sys.exit(1)
+            return None
 
         return None
     
@@ -308,7 +312,7 @@ class DatabasePostgreSQL(Database):
                     return False
 
         except Exception as e:
-            self.conn.rollback()
+            self._rollback()
             print(f"DatabasePostgreSQL >> Error creating table '{table_name}': {e}")
             return False
         
@@ -378,6 +382,7 @@ class DatabasePostgreSQL(Database):
             conn.autocommit = True
             cursor = conn.cursor()
             cursor.execute(sql.SQL("DROP DATABASE IF EXISTS {}").format(sql.Identifier(schema_name)))
+            self._commit()
             print(f"DatabasePostgreSQL >> Successfully dropped '{schema_name}' database schema.")
             cursor.close()
             conn.close()
@@ -563,28 +568,43 @@ class DatabasePostgreSQL(Database):
             values = tuple(kwargs.values())
 
             cursor.execute(f"INSERT INTO {table_name} ({fields}) VALUES ({placeholders});", values)
-            self.conn.commit()
+            self._commit()
+        except AttributeError:
+            print(f"DatabasePostgreSQL >> Connection to the DB is not defined. Try reconnecting to the DB.")
         except Exception as e:
             print(f"DatabasePostgreSQL >> PostgreSQL error when inserting data into '{table_name}': {e}")
-            self.conn.rollback()
         finally:
-            cursor.close()
+            self._rollback()
 
         return None
 
 
-    def commit_transactions(self):
+    def _commit(self):
         """
-        Commits the transactions operated since the last commit.
+        Handles the commits of the transactions operated since last commit.
         """
-        raise NotImplementedError
+        try:
+            self.conn.commit()
+        except AttributeError:
+            print("DatabasePostgreSQL >> Connector is not defined. Try reconnecting to the DB.")
+        except:
+            print("DatabasePostgreSQL >> Failed to commit transaction.")
 
+        return None
+    
 
-    def rollback_transactions(self):
+    def _rollback(self):
         """
-        roolbacks the transactions operated since the last commit.
+        Handles the roolbacks of the transactions operated since last commit.
         """
-        raise NotImplementedError
+        try:
+            self.conn.rollback()
+        except AttributeError:
+            print("DatabasePostgreSQL >> Connector is not defined. Try reconnecting to the DB.")
+        except:
+            print("DatabasePostgreSQL >> Failed to rollback transaction.")
+
+        return None
 
 
     def execute_file(self, file_path: str):
@@ -643,7 +663,7 @@ class DatabasePostgreSQL(Database):
 
         except psycopg2.Error as e:
             print(f"DatabasePostgreSQL >> PostgreSQL error when executing file: {e}")
-            self.conn.rollback()
+            self._rollback()
 
         finally:
             cursor.close()

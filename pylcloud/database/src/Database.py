@@ -26,7 +26,7 @@ class Database(ABC):
 
 
     @abstractmethod
-    def commit_transactions(self):
+    def _commit(self):
         """
         Commits the transactions operated since the last commit.
         """
@@ -34,7 +34,7 @@ class Database(ABC):
 
 
     @abstractmethod
-    def rollback_transactions(self):
+    def _rollback(self):
         """
         roolbacks the transactions operated since the last commit.
         """
