@@ -50,7 +50,7 @@ class DatabaseElasticsearch(Database):
         try:
             self.connect_database(host=host, user=user, password=password)
         except Exception as e:
-            print(f"DatabaseElasticsearch >> An error occured when connecting to '{host}': {e}")
+            self.logger.critical(f"An error occured when connecting to '{host}': {e}")
 
         # Note:
         # The authentication credentials above are required to connect to Elasticsearch.
@@ -73,6 +73,7 @@ class DatabaseElasticsearch(Database):
 
     def create_table(self, *args, **kwargs):
         """See ``create_index()``."""
+        self.logger.warning("Tables do not exist in NoSQL. Create an index instead.")
         return self.create_index(*args, **kwargs)
 
     def create_index(self, 
@@ -103,21 +104,21 @@ class DatabaseElasticsearch(Database):
         """
 
         if ' ' in index_name:
-            print(f"DatabaseElasticsearch >> Index name can't contain blank spaces. Index name changed to '{index_name.replace(' ', '-')}'.")
+            self.logger.info(f"Index name can't contain blank spaces. Index name changed to '{index_name.replace(' ', '-')}'.")
             index_name = index_name.replace(' ', '-')
 
         if mapping_file:
             try:
                 with open(mapping_file, 'r') as f:
                     settings = json.load(f)
-                print(f"DatabaseElasticsearch >> Mapping loaded from '{mapping_file}'.")
+                self.logger.info(f"Mapping loaded from '{mapping_file}'.")
             except Exception as e:
-                print(f"DatabaseElasticsearch >> Failed to load mapping file: {e}")
-                return
+                self.logger.error(f"Failed to load mapping file: {e}")
+                return None
         else:
             if not properties:
-                print("DatabaseElasticsearch >> You must provide either 'properties' or a valid 'mapping_file'.")
-                return
+                self.logger.error("You must provide either 'properties' or a valid 'mapping_file'.")
+                return None
 
             settings = {
                 "settings": {
@@ -131,9 +132,9 @@ class DatabaseElasticsearch(Database):
 
         if not self.es.indices.exists(index=index_name):
             self.es.indices.create(index=index_name, body=settings)
-            print(f"DatabaseElasticsearch >> Index '{index_name}' created.")
+            self.logger.info(f"Index '{index_name}' created.")
         else:
-            print(f"DatabaseElasticsearch >> Index '{index_name}' already exists.")
+            self.logger.info(f"Index '{index_name}' already exists.")
 
     
     def disconnect_database(self):
@@ -147,12 +148,13 @@ class DatabaseElasticsearch(Database):
         """
         Drops all the indexes from a cluster.
         """
-        print("DatabaseElasticsearch >> Can't drop an Elasticsearch. Will drop all the indexes from this cluster instead.")
+        self.logger.warning("Can't drop an Elasticsearch. Will drop all the indexes from this cluster instead.")
         raise NotImplementedError
 
 
     def drop_table(self, *args, **kwargs):
         """See ``drop_index()``."""
+        self.logger.warning("Use drop index instead.")
         return self.drop_index(*args, **kwargs)
     
     def drop_index(self, index_name: str):
@@ -161,12 +163,11 @@ class DatabaseElasticsearch(Database):
         """
         try:
             response = self.es.indices.delete(index=index_name)
-            print(f"DatabaseElasticsearch >> Index '{index_name}' deleted successfully.")
+            self.logger.info(f"Index '{index_name}' deleted successfully.")
         except Exception as e:
-            print(f"DatabaseElasticsearch >> Failed to delete index '{index_name}': {e}")
+            self.logger.error(f"Failed to delete index '{index_name}': {e}")
         
         return None
-    
 
     
     def delete_data(self, index_name: str, pairs: dict[str, str] = {}):
@@ -188,15 +189,16 @@ class DatabaseElasticsearch(Database):
         
         try:
             response = self.es.delete_by_query(index=index_name, body=query)
-            print(f"DatabaseElasticsearch >> Successfully deleted date from '{index_name}'.")
+            self.logger.debug(response)
         except Exception as e:
-            print(f"DatabaseElasticsearch >> Failed to delete data from '{index_name}': {e}")
+            self.logger.error(f"Failed to delete data from '{index_name}': {e}")
 
         return None
 
 
     def list_databases(self, *args, **kwargs):
         """See ``list_clusters()``."""
+        self.logger.warning("Use list clusters instead.")
         return self.list_clusters(*args, **kwargs)
     
     def list_clusters(self):
@@ -204,12 +206,13 @@ class DatabaseElasticsearch(Database):
         List the databases (clusters) present on an Elasticsearch DB server.
         """
         info = self.es.info()
-        print(f"DatabaseElasticsearch >> Cluster info: {info}")
+        self.logger.info(f"Cluster info: {info}")
         return info
     
 
     def list_tables(self, *args, **kwargs):
         """See ``list_indexes()``."""
+        self.logger.warning("Use list indexes instead.")
         return self.list_indexes(*args, **kwargs)
 
     def list_indexes(self, system_db: bool = False):
@@ -228,15 +231,13 @@ class DatabaseElasticsearch(Database):
         if system_db:
             # built-in system indexes start with a dot
             indexes = [index['index'] for index in self.es.cat.indices(format='json')] # type: ignore
-            print(f"DatabaseElasticsearch >> Found indexes: {', '.join(indexes)}")
+            self.logger.info(f"Found indexes: {', '.join(indexes)}")
             return indexes
         else:
             indexes = [index['index'] for index in self.es.cat.indices(format='json') if not index['index'].startswith(".")] # type: ignore
-            print(f"DatabaseElasticsearch >> Found indexes: {', '.join(indexes)}")
+            self.logger.info(f"Found indexes: {', '.join(indexes)}")
             return indexes
         
-        return None
-
 
     def send_data(self, index_name: str, documents: list[dict], _ids: Optional[list[str]] = None):
         """
@@ -266,13 +267,13 @@ class DatabaseElasticsearch(Database):
             for document, _id in zip(documents, _ids) # type: ignore
         ]
 
-        print(f"DatabaseElasticsearch >> Sending {len(actions)} documents into index '{index_name}'.")
+        self.logger.info(f"Sending {len(actions)} documents into index '{index_name}'.")
         response = helpers.bulk(self.es, actions, raise_on_error=False)
+        self.logger.debug(response)
         if response[1]:
-            print(f"DatabaseElasticsearch >> Interface error when sending documents: {response}")
+            self.logger.error(f"Interface error when sending documents: {response}")
 
         return None
-    
 
 
     def query_data(self, 
@@ -347,12 +348,12 @@ class DatabaseElasticsearch(Database):
         try:
             for doc in helpers.scan(self.es, index=index_name, query=query, size=1000):
                 documents.append(doc)
-            print(f"DatabaseElasticsearch >> Field search found {len(documents)} matching documents.")
+            self.logger.debug(f"Field search found {len(documents)} matching documents.")
         except NotFoundError as e:
-            print(f"DatabaseElasticsearch >> Index '{e.info['error']['index']}' not found.")
+            self.logger.error(f"Index '{e.info['error']['index']}' not found.")
             return []
         except Exception as e:
-            print(f"DatabaseElasticsearch >> An error occurred during semantic search: {e}")
+            self.logger.error(f"An error occurred during semantic search: {e}")
             return []
 
         return documents
@@ -412,10 +413,10 @@ class DatabaseElasticsearch(Database):
         try:
             response = self.es.search(index=index_name, body=query)
             documents = [hit for hit in response['hits']['hits']]
-            print(f"DatabaseElasticsearch >> Vector search found {len(documents)} matching documents.")
+            self.logger.debug(f"Vector search found {len(documents)} matching documents.")
             return documents
         except Exception as e:
-            print(f"DatabaseElasticsearch >> Error: An error occurred: {e}")
+            self.logger.error(f"Error: An error occurred: {e}")
             return []
 
 
