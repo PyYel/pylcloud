@@ -70,7 +70,7 @@ class Database(ABC):
         """
         Connects to the database and creates a connector object. 
         """
-        pass
+        raise NotImplementedError
 
 
     @abstractmethod
@@ -94,7 +94,7 @@ class Database(ABC):
         """
         Creates a new index/collection.
         """
-        pass
+        raise NotImplementedError
 
 
     @abstractmethod
@@ -102,7 +102,7 @@ class Database(ABC):
         """
         Closes the database linked to the connector ``conn``.
         """
-        pass
+        raise NotImplementedError
 
 
     @abstractmethod
@@ -110,7 +110,7 @@ class Database(ABC):
         """
         Drops the matching indexes/collections on this cluster (database).
         """
-        pass
+        raise NotImplementedError
 
     
 
@@ -119,7 +119,7 @@ class Database(ABC):
         """
         Lists all the indexes/collections on this cluster (database).
         """
-        pass
+        raise NotImplementedError
 
 
     @abstractmethod    
@@ -127,7 +127,7 @@ class Database(ABC):
         """
         Retreives matching entries/records/documents from the DB.
         """
-        pass
+        raise NotImplementedError
 
 
     @abstractmethod    
@@ -135,7 +135,15 @@ class Database(ABC):
         """
         Injects data into the DB by creating new entry/record/document.
         """
-        pass
+        raise NotImplementedError
+
+
+    @abstractmethod
+    def update_data(self, *args, **kwargs):
+        """
+        Updates the values of existing records matching the query.
+        """
+        raise NotImplementedError
 
 
     @abstractmethod    
@@ -143,7 +151,7 @@ class Database(ABC):
         """
         Deletes matching entries/records/documents from the DB.
         """
-        pass
+        raise NotImplementedError
 
 
     def _hash_content(self, content: str, prefixes: list[str]):

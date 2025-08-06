@@ -274,6 +274,10 @@ class DatabaseElasticsearch(Database):
             self.logger.error(f"Interface error when sending documents: {response}")
 
         return None
+    
+
+    def update_data(self, *args, **kwargs):
+        return super().update_data(*args, **kwargs)
 
 
     def query_data(self, 

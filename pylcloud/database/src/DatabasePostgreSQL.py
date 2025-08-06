@@ -316,24 +316,73 @@ class DatabasePostgreSQL(Database):
 
         return None
 
-        
-    def delete_data(self, FROM: str, WHERE: str, VALUES: tuple[str]):
+
+    def delete_data(self,
+                    FROM: str,
+                    WHERE: Union[str, list[str], tuple[str]],
+                    VALUES: Optional[Union[str, int, list, tuple]] = None,
+                    LIKE: Optional[Union[str, list[str], tuple[str]]] = None):
         """
-        Removes data from a table under a condition.
+        Removes data from a PostgreSQL table under optional conditions.
+
+        Parameters
+        ----------
+        FROM: str
+            The table name to delete from.
+        WHERE: str, list[str]
+            The column(s) to use in the WHERE clause.
+        VALUES: Optional[str, int, list, tuple]
+            Values to use for exact matches.
+        LIKE: Optional[str, list[str]]
+            Pattern(s) to use for LIKE matching.
+
+        Notes
+        -----
+        - Cascading is handled by the database schema via ``ON DELETE CASCADE`` constraints.
         """
         try:
             cursor = self.conn.cursor()
-            format_strings = ','.join(['%s'] * len(VALUES))
-            query = f"DELETE FROM {FROM} WHERE {WHERE}=({format_strings});"
-            cursor.execute(query, VALUES)
+
+            if not WHERE:
+                self.logger.warning("Deleting the whole data without WHERE clause is not suppported. Consider using a joker LIKE query.")
+                return None
+
+            where_cols = [WHERE] if isinstance(WHERE, str) else list(WHERE)
+
+            # Exact match
+            if VALUES is not None:
+                values = [VALUES] if not isinstance(VALUES, (list, tuple)) else list(VALUES)
+                if len(where_cols) != len(values):
+                    self.logger.warning("Number of WHERE columns must match number of VALUES.")
+                    return None
+
+                where_clause = " AND ".join([f"{col} = %s" for col in where_cols])
+                query = f"DELETE FROM {FROM} WHERE {where_clause};"
+                cursor.execute(query, tuple(values))
+                self.logger.debug(f"{query} -- {values}")
+
+            # LIKE match
+            elif LIKE is not None:
+                patterns = [LIKE] if not isinstance(LIKE, (list, tuple)) else list(LIKE)
+                if len(where_cols) != len(patterns):
+                    self.logger.warning("Number of WHERE columns must match number of LIKE patterns.")
+                    return None
+
+                where_clause = " AND ".join([f"{col} LIKE %s" for col in where_cols])
+                query = f"DELETE FROM {FROM} WHERE {where_clause};"
+                cursor.execute(query, tuple(patterns))
+                self.logger.debug(f"{query} -- {patterns}")
+
             self._commit()
-            self.logger.debug(query)
+
         except Exception as e:
             self.logger.error(f"PostgreSQL error when deleting data: {e}")
+
         finally:
             cursor.close()
 
         return None
+
 
 
     def disconnect_database(self):
@@ -603,8 +652,20 @@ class DatabasePostgreSQL(Database):
 
     def send_data(self, table_name: str, **kwargs):
         """
-        Inserts data into a PostgreSQL table.
+        Inserts data into a PostgreSQL table. Infers column-value pairs from ``kwargs`` key-value pairs.
+
+        Parameters
+        ----------
+        table_name: str
+            The name of the table to insert into.
+        **kwargs
+            Column-value pairs to update.
+
+        Examples
+        --------
+        >>> send_data(table_name="users", user_id=42, user_name="jdoe")
         """
+        
         try:
             cursor = self.conn.cursor()
             fields = ",".join(list(kwargs.keys()))
@@ -620,6 +681,83 @@ class DatabasePostgreSQL(Database):
 
         except Exception as e:
             self.logger.error(f"PostgreSQL error when inserting data into '{table_name}': {e}")
+
+        finally:
+            self._rollback()
+
+        return None
+
+
+    def update_data(self,
+                    table_name: str,
+                    WHERE: Optional[Union[str, list[str], tuple[str]]] = None,
+                    VALUES: Optional[Union[Any, list[Any], tuple[Any]]] = None,
+                    LIKE: Optional[Union[str, list[str], tuple[str]]] = None,
+                    **kwargs):
+        """
+        Updates data in a PostgreSQL table based on a WHERE clause.
+
+        Parameters
+        ----------
+        table_name: str
+            The name of the table to update.
+        WHERE: Optional[str or list[str]]
+            The column(s) to use in the WHERE clause.
+        VALUES: Optional[Any or list[Any]]
+            The values to use for exact matches.
+        LIKE: Optional[str or list[str]]
+            The pattern(s) to use for LIKE matching.
+        **kwargs
+            Column-value pairs to update.
+        """
+
+        try:
+            cursor = self.conn.cursor()
+
+            # Prepare SET clause
+            set_clause = ", ".join([f"{field} = %s" for field in kwargs])
+            set_values = tuple(kwargs.values())
+
+            # Prepare WHERE clause
+            where_clause = ""
+            where_values = ()
+
+            if WHERE is not None:
+                where_cols = [WHERE] if isinstance(WHERE, str) else list(WHERE)
+
+                if VALUES is not None:
+                    values = [VALUES] if not isinstance(VALUES, (list, tuple)) else list(VALUES)
+                    if len(where_cols) != len(values):
+                        self.logger.warning("Number of WHERE columns must match number of VALUES.")
+                        return None
+                    where_clause = " AND ".join([f"{col} = %s" for col in where_cols])
+                    where_values = tuple(values)
+
+                elif LIKE is not None:
+                    patterns = [LIKE] if not isinstance(LIKE, (list, tuple)) else list(LIKE)
+                    if len(where_cols) != len(patterns):
+                        self.logger.warning("Number of WHERE columns must match number of LIKE patterns.")
+                        return None
+                    where_clause = " AND ".join([f"{col} LIKE %s" for col in where_cols])
+                    where_values = tuple(patterns)
+
+            # Build final query
+            query = f"UPDATE {table_name} SET {set_clause}"
+            if where_clause:
+                query += f" WHERE {where_clause}"
+            query += ";"
+
+            full_values = set_values + where_values
+            cursor.execute(query, full_values)
+
+            self.logger.debug(f"{query} -- {full_values}")
+            self._commit()
+
+        except AttributeError:
+            self.logger.error("Connection to the DB is not defined. Try reconnecting to the DB.")
+
+        except Exception as e:
+            self.logger.error(f"PostgreSQL error when updating data in '{table_name}': {e}")
 
         finally:
             self._rollback()
