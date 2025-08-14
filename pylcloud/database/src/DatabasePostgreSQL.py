@@ -2,7 +2,7 @@ import os, sys
 import psycopg2
 from psycopg2 import sql, OperationalError, errors
 from psycopg2._psycopg import connection
-from psycopg2.extras import DictCursor
+from psycopg2.extras import DictCursor, register_uuid
 from typing import Union, Optional, Any
 import json
 import boto3
@@ -87,6 +87,7 @@ class DatabasePostgreSQL(Database):
         self.aws_region_name = aws_region_name
 
         self.conn: psycopg2._psycopg.connection = None # type: ignore
+        register_uuid() # Postgre UUID object adapter
 
         try:
             self.connect_database(schema_name=self.schema_name, create_if_not_exists=False)
@@ -763,6 +764,20 @@ class DatabasePostgreSQL(Database):
             self._rollback()
 
         return None
+
+
+    def raw_sql(self, SQL: str, VALUES: tuple[str]):
+
+        try:
+            self.logger.warning(f"Running raw SQL query: {SQL}")
+            cursor = self.conn.cursor(cursor_factory=DictCursor)
+            cursor.execute(SQL, VALUES)
+            rows = cursor.fetchall()
+            cursor.close()
+        except Exception as e:
+            self.logger.critical(f"SQL raw query failed:\n {e}")
+
+        return rows
 
 
     def _commit(self):
