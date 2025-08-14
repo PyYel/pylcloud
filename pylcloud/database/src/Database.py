@@ -33,7 +33,7 @@ class Database(ABC):
         """
 
         if logs_dir is None:
-            logs_dir = os.path.join(os.getcwd(), "log", str(datetime.now().strftime("%Y-%m-%d")))
+            logs_dir = os.path.join(os.getcwd(), "logs", str(datetime.now().strftime("%Y-%m-%d")))
         os.makedirs(logs_dir, exist_ok=True)
 
         self.logger = logging.getLogger(logs_name)
