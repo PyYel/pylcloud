@@ -92,7 +92,7 @@ class DatabaseOpenSearch(Database):
                 session_token=credentials.token
             )
 
-            self.os = OpenSearch(
+            self.api_os = OpenSearch(
                 hosts=[host],
                 http_auth=awsauth,
                 use_ssl=True,
@@ -102,7 +102,7 @@ class DatabaseOpenSearch(Database):
             self.logger.info(f"Connected to AWS OpenSearch Service at {host} using IAM authentication")
         else:
             # Standard OpenSearch with basic auth
-            self.os = OpenSearch(
+            self.api_os = OpenSearch(
                 hosts=[host],
                 http_auth=(user, password),
                 use_ssl=True if host.startswith("https") else False,
@@ -110,7 +110,7 @@ class DatabaseOpenSearch(Database):
             )
             self.logger.info(f"Connected to OpenSearch at {host} using basic authentication")
 
-        return self.os
+        return self.api_os
 
 
     def create_table(self, *args, **kwargs):
@@ -172,8 +172,8 @@ class DatabaseOpenSearch(Database):
                 },
             }
 
-        if not self.os.indices.exists(index=index_name):
-            self.os.indices.create(index=index_name, body=settings)
+        if not self.api_os.indices.exists(index=index_name):
+            self.api_os.indices.create(index=index_name, body=settings)
             self.logger.info(f"Index '{index_name}' created.")
         else:
             self.logger.info(f"Index '{index_name}' already exists.")
@@ -205,7 +205,7 @@ class DatabaseOpenSearch(Database):
         Deletes an index and all its content.
         """
         try:
-            response = self.os.indices.delete(index=index_name)
+            response = self.api_os.indices.delete(index=index_name)
             self.logger.info(f"Index '{index_name}' deleted successfully.")
         except Exception as e:
             self.logger.error(f"Failed to delete index '{index_name}': {e}")
@@ -231,7 +231,7 @@ class DatabaseOpenSearch(Database):
             query = {"query": {"match": pairs}}
 
         try:
-            response = self.os.delete_by_query(index=index_name, body=query)
+            response = self.api_os.delete_by_query(index=index_name, body=query)
             self.logger.debug(response)
         except Exception as e:
             self.logger.error(f"Failed to delete data from '{index_name}': {e}")
@@ -248,7 +248,7 @@ class DatabaseOpenSearch(Database):
         """
         List the databases (clusters) present on an OpenSearch server.
         """
-        info = self.os.info()
+        info = self.api_os.info()
         self.logger.info(f"Cluster info: {info}")
         return info
 
@@ -274,11 +274,11 @@ class DatabaseOpenSearch(Database):
         try:
             if system_db:
                 # built-in system indexes start with a dot
-                indexes = [index['index'] for index in self.os.cat.indices(format='json')]
+                indexes = [index['index'] for index in self.api_os.cat.indices(params={"format":'json'})]
                 self.logger.info(f"Found indexes: {', '.join(indexes)}")
                 return indexes
             else:
-                indexes = [index['index'] for index in self.os.cat.indices(format='json') if not index['index'].startswith(".")]
+                indexes = [index['index'] for index in self.api_os.cat.indices(params={"format":'json'}) if not index['index'].startswith(".")]
                 self.logger.info(f"Found indexes: {', '.join(indexes)}")
                 return indexes
         except Exception as e:
@@ -311,7 +311,7 @@ class DatabaseOpenSearch(Database):
         ]
 
         self.logger.info(f"Sending {len(actions)} documents into index '{index_name}'.")
-        response = helpers.bulk(self.os, actions, raise_on_error=False)
+        response = helpers.bulk(self.api_os, actions, raise_on_error=False)
         self.logger.debug(response)
         if response[1]:
             self.logger.error(f"Interface error when sending documents: {response}")
@@ -362,10 +362,11 @@ class DatabaseOpenSearch(Database):
 
         documents = []
         try:
-            for doc in helpers.scan(self.os, index=index_name, query=query, size=1000):
+            for doc in helpers.scan(self.api_os, index=index_name, query=query, size=1000):
                 documents.append(doc)
             self.logger.debug(f"Field search found {len(documents)} matching documents.")
         except NotFoundError as e:
+            e.info
             self.logger.error(f"Index '{e.info['error']['index']}' not found.")
             return []
         except Exception as e:
@@ -373,6 +374,10 @@ class DatabaseOpenSearch(Database):
             return []
 
         return documents
+    
+
+    def update_data(self, *args, **kwargs):
+        raise NotImplementedError
 
 
     def similarity_search(self, index_name: str, 
@@ -450,7 +455,7 @@ class DatabaseOpenSearch(Database):
             }
 
         try:
-            response = self.os.search(index=index_name, body=query)
+            response = self.api_os.search(index=index_name, body=query)
             documents = [hit for hit in response['hits']['hits']]
             self.logger.debug(f"Vector search found {len(documents)} matching documents.")
             return documents

@@ -5,6 +5,8 @@ elasticsearch
 fastapi
 uvicorn
 psycopg2
+opensearch-py 
+requests-aws4auth
 
 # For testing
 python-dotenv==1.0.1
