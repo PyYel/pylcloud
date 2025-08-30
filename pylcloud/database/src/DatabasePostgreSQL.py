@@ -3,6 +3,7 @@ import psycopg2
 from psycopg2 import sql, OperationalError, errors
 from psycopg2._psycopg import connection
 from psycopg2.extras import DictCursor, register_uuid
+from psycopg2.extensions import register_type, UNICODE
 from typing import Union, Optional, Any
 import json
 import boto3
@@ -10,15 +11,17 @@ import psycopg2._psycopg
 
 from .Database import Database
 
+
 class DatabasePostgreSQL(Database):
     """
-    A parent class that manages PostgreSQL database connections,
-    compatible with standard PostgreSQL, AWS Aurora PostgreSQL, and AWS RDS PostgreSQL.
+    A class to manage PostgreSQL databases (RDS, Aurora, local) with optional IAM authentication.
     """
+
     def __init__(self,
-                 schema_name: str = "public",
                  host: str = "127.0.0.1",
-                 user: str = "postgres",
+                 database: str = "app_database",
+                 schema: str = "app_schema",
+                 user: str = "app_user",
                  password: Optional[str] = None,
                  port: str = "5432",
                  ssl_mode: Optional[str] = None,
@@ -35,7 +38,7 @@ class DatabasePostgreSQL(Database):
 
         Parameters
         ----------
-        schema_name: str
+        schema: str
             The name of the schema (can be seen as the database name) to connect to. Having multiple databases on a same server is not
             supported, so the server management is limited to schema level. 
         host: str
@@ -74,207 +77,186 @@ class DatabasePostgreSQL(Database):
         """
         super().__init__(logs_name="DatabasePostgreSQL")
 
-        self.schema_name = schema_name.lower().replace("-", "_").replace(" ", "_")
         self.host = host
+        self.database = database
+        self.schema = schema.lower().replace("-", "_").replace(" ", "_")
         self.user = user
         self.password = password
         self.port = port
         self.ssl_mode = ssl_mode
         self.connection_timeout = connection_timeout
-
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
         self.aws_region_name = aws_region_name
+        self.conn: psycopg2._psycopg.connection = None  # type: ignore
 
-        self.conn: psycopg2._psycopg.connection = None # type: ignore
-        register_uuid() # Postgre UUID object adapter
+        register_type(UNICODE) # Register UUID type
+
+        return None
+
+    def _run(self, query, params=None):
+        """Run simple admin management query."""
+        query_str = str(query).replace("\n", " ").strip()
+        self.logger.debug(f"Running SQL: {query_str} | Params: {params}")
 
         try:
-            self.connect_database(schema_name=self.schema_name, create_if_not_exists=False)
+            if self.conn is not None:
+                with self.conn.cursor() as cur:
+                    cur.execute(query, params)
+                self.logger.debug(f"SQL query succeeded: {query_str}")
+            else:
+                self.logger.error("Could not run SQL query, connection is closed.")
         except Exception as e:
-            self.logger.error(f"Auto-connect to '{self.schema_name}' failed, make sure the schema and user exist: {e}")
+            self.logger.error(f"SQL query failed: {query_str} | Error: {e}", exc_info=True)
         
         return None
-    
 
-    def _create_iam_user(self, user: str, schema_name: Optional[str] = None):
+
+    def connect_database(self, 
+                         database: str, 
+                         user: str, 
+                         password: Optional[str] = None):
         """
-        Create a database user with IAM authentication. 
-        The user should match an existing IAM user with RDS permissions.
-
-        Parameters
-        ----------
-        user: str
-            The name of the IAM user to create.
-        schema_name: str
-            The schema to give user access to. If None, will apply to the current schema in use.
+        Get a psycopg2 ``conn`` connection to a specified database.
         """
 
-        if schema_name is not None:
-            self.schema_name = schema_name.lower().replace("-", "_").replace(" ", "_")
-
-        try:
-            with self.conn.cursor() as cursor:
-                # Check if user exists
-                cursor.execute(
-                    "SELECT EXISTS(SELECT 1 FROM pg_roles WHERE rolname = %s)",
-                    (user,)
-                )
-                user_exists = cursor.fetchone()[0]
-
-                if not user_exists:
-                    cursor.execute(
-                        sql.SQL("CREATE USER {} WITH LOGIN").format(sql.Identifier(user))
-                    )
-                    cursor.execute(
-                        sql.SQL("GRANT rds_iam TO {}").format(sql.Identifier(user))
-                    )
-                    self.logger.info(f"User '{user}' created with IAM authentication")
-                else:
-                    self.logger.info(f"User '{user}' already exists")
-
-                cursor.execute(
-                    sql.SQL("GRANT ALL PRIVILEGES ON SCHEMA {} TO {}").format(
-                        sql.Identifier(self.schema_name),
-                        sql.Identifier(user)
-                    )
-                )
-                cursor.execute(
-                    sql.SQL("ALTER USER {} SET search_path TO {}").format(
-                        sql.Identifier(user),
-                        sql.Identifier(self.schema_name)
-                    )
-                )
-                cursor.execute(
-                    sql.SQL("GRANT USAGE ON SCHEMA public TO {}").format(
-                        sql.Identifier(user)
-                    )
-                )
-                self._commit()
-                self.logger.info(f"Granted privileges on schema '{self.schema_name}' to user '{user}'. Consider reconnecting to the DB.")
-
-        except Exception as e:
-            self.logger.error(f"Error creating IAM user: {e}")
-
-        return None
-
-
-    def connect_database(self, schema_name: Optional[str] = None, create_if_not_exists: bool = False):
-        """
-        Connects to the PostgreSQL 'postgres' database and sets the specified schema as the search path.
-
-        Parameters
-        ----------
-        schema_name: Optional[str] 
-            The schema name to use within the postgres database. If None, uses the schema name from __init__.
-        create_if_not_exists: bool
-            Whether to create the specified schema if it doesn't exist.
-
-        Note
-        ----
-        - Connection will instantiate a connector object: ``self.conn``.
-        - This method always connects to the 'postgres' database and then sets the search path to the specified schema.
-        """
-
-        def _create_schema():
+        def _get_connection_params(database: str, connect_user: str, password: Optional[str]):
             """
-            Creates a new schema in the PostgreSQL database if it doesn't exist.
-            """
-            try:
-                with self.conn.cursor() as cursor:
-                    # Create schema if it doesn't exist
-                    cursor.execute(f"CREATE SCHEMA IF NOT EXISTS {self.schema_name};")
-                    self.conn.commit()
-                    self.logger.info(f"Schema '{self.schema_name}' created successfully.")
-
-                    # Set the search path to the new schema
-                    cursor.execute(f"SET search_path TO {self.schema_name}, public;")
-                    self.conn.commit()
-            except Exception as e:
-                self.logger.error(f"Error creating schema: {e}")
-                raise
-
-            return None
-
-        def _get_connection_params():
-            """
-            Prepares connection parameters based on the connection type.
-            Always connects to 'postgres' database.
+            Build psycopg2 connection parameters.
+            If password is None → generate IAM token.
             """
             params = {
-                'host': self.host,
-                'user': self.user,
-                'password': self.password,
-                'dbname': 'postgres',  # Always connect to 'postgres' database
-                'port': self.port,
-                'connect_timeout': self.connection_timeout
+                "host": self.host,
+                "user": connect_user,
+                "dbname": database,
+                "port": self.port,
+                "connect_timeout": self.connection_timeout,
             }
 
             if self.ssl_mode:
-                params['sslmode'] = self.ssl_mode
+                params["sslmode"] = self.ssl_mode
 
-            # No password assume an IAM connection
-            if self.password is None:
-                try:
-                    client = boto3.client('rds', 
-                                        aws_access_key_id=self.aws_access_key_id, 
-                                        aws_secret_access_key=self.aws_secret_access_key, 
-                                        region_name=self.aws_region_name)
-                    token = client.generate_db_auth_token(
-                        DBHostname=self.host,
-                        Port=int(self.port), 
-                        DBUsername=self.user, # IAM Username
-                        Region=self.aws_region_name
-                    )
-                    params['password'] = token
-                    # For Aurora Serverless, SSL is mandatory
-                    # if 'sslmode' not in params:
-                    params['sslmode'] = 'require'
-
-                except Exception as e:
-                    self.logger.error(f"Error generating AWS auth token: {e}")
-                    return {}
+            # IAM auth if no password
+            if password is None or password=="":
+                self.logger.info(f"Using IAM auth for user '{connect_user}'")
+                client = boto3.client(
+                    "rds",
+                    aws_access_key_id=self.aws_access_key_id,
+                    aws_secret_access_key=self.aws_secret_access_key,
+                    region_name=self.aws_region_name,
+                )
+                token = client.generate_db_auth_token(
+                    DBHostname=self.host,
+                    Port=int(self.port),
+                    DBUsername=connect_user,
+                    Region=self.aws_region_name,
+                )
+                params["password"] = token
+                if "sslmode" not in params:
+                    params["sslmode"] = "require"
+            else:
+                params["password"] = password
 
             return params
 
-        # Update schema name if provided
-        if schema_name:
-            self.schema_name = schema_name.lower().replace("-", "_").replace(" ", "_")
+        # Enforce disconnection from other DB
+        try:
+            self.conn.close()
+            self.conn = None # type: ignore
+        except:
+            self.conn = None # type: ignore
 
         try:
-            # Connect and use schema (creates it if create_if_not_exists)
-            connection_params = _get_connection_params()
-            self.conn = psycopg2.connect(**connection_params)
+            conn_params = _get_connection_params(database, user, password)
+            self.conn = psycopg2.connect(**conn_params)
+            self.conn.autocommit = True
 
-            with self.conn.cursor() as cursor:
-                cursor.execute("SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name = %s)", 
-                            (self.schema_name,))
-                schema_exists = cursor.fetchone()[0]
+            self.conn.cursor().execute(f"SET search_path TO {self.schema}, public;")
+            self._commit()
 
-                if not schema_exists:
-                    if create_if_not_exists:
-                        self.logger.info(f"Schema '{self.schema_name}' does not exist. Creating it.")
-                        _create_schema()
-                    else:
-                        self.logger.warning(f"Schema '{self.schema_name}' does not exist and create_if_not_exists=False.")
-                        self.conn.close()
-                        return None
+            self.logger.info(f"Connector created for database={database}")
+            self.logger.info(f"Connector path set to: '{self.schema}'.")
 
-                # Set the search path to the specified schema
-                cursor.execute(f"SET search_path TO {self.schema_name}, public;")
-                self._commit()
-
-            self.logger.info(f"Connected to schema '{self.schema_name}'.")
-
-        except psycopg2.OperationalError as e:
-            self.logger.critical(f"Connection error: {e}")
             return None
+        
         except Exception as e:
-            self.logger.critical(f"Unexpected error: {e}")
+            self.logger.critical(f"Database connection failed: {e}")
             return None
+
+
+    def _init_db(self,
+                database: str = "app_database",
+                schema: str = "app_schema",
+                user: str = "app_user",
+                master_user: str = "postgres",
+                master_password: Optional[str] = "password"):
+        """
+        Initialize the target database, schema, and user with automatic IAM vs password detection.
+        - If master_password is None → IAM token authentication is used.
+        """
+
+        schema = schema.lower().replace("-", "_").replace(" ", "_")
+        iam_mode = True if self.aws_access_key_id is not None and self.aws_region_name is not None and self.aws_secret_access_key is not None else False
+        self.logger.info(
+            f"Initializing DB '{database}', schema '{schema}', user '{user}' "
+            f"using {'IAM' if iam_mode else 'password'} auth"
+        )
+
+        # 1. Connect to 'postgres' as master
+        self.connect_database("postgres", master_user, master_password)
+
+        # 2. Create target DB if missing
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier("app_database")))
+            self.conn.close()
+        except Exception as e:
+            if "already exists" in str(e):
+                self.logger.warning(f"Database '{database}' already exists and won't be recreated unless dropped.")
+            else:
+                self.logger.error(str(e))
+
+        # 3. Connect to target DB
+        self.connect_database(database, master_user, master_password)
+
+        # 4. Create app user
+        self._run(sql.SQL("DO $$ BEGIN CREATE ROLE {} LOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;")
+                .format(sql.Identifier(user)))
+        if iam_mode:
+            self._run(sql.SQL("GRANT rds_iam TO {};").format(sql.Identifier(user)))
+
+        # 5. Lock down public schema
+        self._run("REVOKE CREATE ON SCHEMA public FROM PUBLIC;")
+        self._run(sql.SQL("REVOKE ALL ON DATABASE {} FROM PUBLIC;").format(sql.Identifier(database)))
+
+        # 6. Create schema safely
+        self._run(sql.SQL("CREATE SCHEMA IF NOT EXISTS {};").format(sql.Identifier(schema)))
+        self._run(sql.SQL("ALTER SCHEMA {} OWNER TO {};").format(sql.Identifier(schema), sql.Identifier(user)))
+
+        # 7. Grant privileges
+        self._run(sql.SQL("GRANT CONNECT ON DATABASE {} TO {};").format(sql.Identifier(database), sql.Identifier(user)))
+        self._run(sql.SQL("GRANT USAGE ON SCHEMA {} TO {};").format(sql.Identifier(schema), sql.Identifier(user)))
+        self._run(sql.SQL("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA {} TO {};")
+                .format(sql.Identifier(schema), sql.Identifier(user)))
+        self._run(sql.SQL("GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA {} TO {};")
+                .format(sql.Identifier(schema), sql.Identifier(user)))
+
+        # 8. Default privileges for future objects
+        self._run(sql.SQL("""
+            ALTER DEFAULT PRIVILEGES IN SCHEMA {}
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {};
+        """).format(sql.Identifier(schema), sql.Identifier(user)))
+        self._run(sql.SQL("""
+            ALTER DEFAULT PRIVILEGES IN SCHEMA {}
+            GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO {};
+        """).format(sql.Identifier(schema), sql.Identifier(user)))
+
+        # 9. Set search_path
+        self._run(sql.SQL("SET search_path TO {}, public;").format(sql.Identifier(schema)))
+        self.logger.info(f"DB setup complete: Database={database}, Schema={schema}, User={user} (IAM={iam_mode})")
 
         return None
-    
+        
 
     def create_table(self, table_name: str, column_definitions: list[str]):
         """
@@ -293,22 +275,25 @@ class DatabasePostgreSQL(Database):
             True if table was created or already exists and is accessible, False otherwise
         """
 
+        if self.conn is None:
+            self.connect_database(database=self.database, user=self.user, password=self.password)
+
         try:
             with self.conn.cursor() as cursor:
-                full_table_name = f"{self.schema_name}.{table_name}"
+                full_table_name = f"{self.schema}.{table_name}"
 
                 create_table_sql = f"CREATE TABLE IF NOT EXISTS {full_table_name} ({', '.join(column_definitions)})"
                 cursor.execute(create_table_sql)
 
                 cursor.execute(f"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = %s AND table_name = %s)", 
-                            (self.schema_name, table_name))
-                table_exists = cursor.fetchone()[0]
+                            (self.schema, table_name))
+                table_exists = cursor.fetchone()[0] # type: ignore
 
                 if table_exists:
-                    self.logger.info(f"Table '{self.schema_name}.{table_name}' successfully created or already exists.")
+                    self.logger.info(f"Table '{self.schema}.{table_name}' successfully created or already exists.")
                     self._commit()
                 else:
-                    self.logger.warning(f"Failed to create table '{self.schema_name}.{table_name}'.")
+                    self.logger.warning(f"Failed to create table '{self.schema}.{table_name}'.")
                     self._rollback()
 
         except Exception as e:
@@ -341,6 +326,9 @@ class DatabasePostgreSQL(Database):
         -----
         - Cascading is handled by the database schema via ``ON DELETE CASCADE`` constraints.
         """
+        if self.conn is None:
+            self.connect_database(database=self.database, user=self.user, password=self.password)
+
         try:
             cursor = self.conn.cursor()
 
@@ -392,7 +380,7 @@ class DatabasePostgreSQL(Database):
         """
         if self.conn:
             self.conn.close()
-            self.logger.info(f"Disconnected from database schema '{self.schema_name}'.")
+            self.logger.info(f"Disconnected from database schema '{self.schema}'.")
 
         return None
 
@@ -401,33 +389,40 @@ class DatabasePostgreSQL(Database):
         """
         Drops a table from the database.
         """
-        cursor = self.conn.cursor()
+
+        if self.conn is None:
+            self.connect_database(database=self.database, user=self.user, password=self.password)
+
         try:
+            cursor = self.conn.cursor()
             drop_table_query = f"DROP TABLE IF EXISTS {table_name} CASCADE;"
             cursor.execute(drop_table_query)
             self._commit()
             self.logger.info(f"Successfully dropped table `{table_name}`.")
+            cursor.close()
         except Exception as e:
             self.logger.error(f"Failed to drop table `{table_name}`: {e}")
             self._rollback()
-        finally:
-            cursor.close()
 
         return None
 
 
-    def drop_schema(self, schema_name: str):
+    def drop_schema(self, schema: str):
         """
         Drops a schema from the PostgreSQL database.
         """
+
+        if self.conn is None:
+            self.connect_database(database=self.database, user=self.user, password=self.password)
+
         try:
             cursor = self.conn.cursor()
             cursor.execute(
-                sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(sql.Identifier(schema_name))
+                sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(sql.Identifier(schema))
             )
             self._commit()
             cursor.close()
-            self.logger.info(f"Successfully dropped schema '{schema_name}'.")
+            self.logger.info(f"Successfully dropped schema '{schema}'.")
 
         except Exception as e:
             self.logger.error(f"PostgreSQL error when dropping schema: {e}")
@@ -436,18 +431,22 @@ class DatabasePostgreSQL(Database):
         return None
 
 
-    def drop_database(self, schema_name: str):
+    def drop_database(self, schema: str):
         """
         See ``drop_schema()``.
         """
         self.logger.debug("Drop database not allowed. Drop schemas instead.")
-        return self.drop_schema(schema_name=schema_name)
+        return self.drop_schema(schema=schema)
 
 
     def list_databases(self, display: bool = False):
         """
         Lists all databases on the server.
         """
+
+        if self.conn is None:
+            self.connect_database(database=self.database, user=self.user, password=self.password)
+
         try:
 
             cursor = self.conn.cursor()
@@ -482,6 +481,10 @@ class DatabasePostgreSQL(Database):
         list
             A list of schema names.
         """
+
+        if self.conn is None:
+            self.connect_database(database=self.database, user=self.user, password=self.password)
+
         try:
             cursor = self.conn.cursor()
 
@@ -525,6 +528,10 @@ class DatabasePostgreSQL(Database):
         list
             A list of table names.
         """
+
+        if self.conn is None:
+            self.connect_database(database=self.database, user=self.user, password=self.password)
+
         try:
 
             cursor = self.conn.cursor()
@@ -533,11 +540,11 @@ class DatabasePostgreSQL(Database):
                 SELECT EXISTS(
                     SELECT 1 FROM information_schema.schemata WHERE schema_name = %s
                 );
-            """, (self.schema_name,))
-            schema_exists = cursor.fetchone()[0]
+            """, (self.schema,))
+            schema_exists = cursor.fetchone()[0] # type: ignore
 
             if not schema_exists:
-                self.logger.info(f"Schema '{self.schema_name}' does not exist.")
+                self.logger.info(f"Schema '{self.schema}' does not exist.")
                 return []
 
             cursor.execute("""
@@ -545,16 +552,16 @@ class DatabasePostgreSQL(Database):
                 FROM information_schema.tables 
                 WHERE table_schema = %s
                 ORDER BY table_name;
-            """, (self.schema_name,))
+            """, (self.schema,))
 
             tables_list = [row[0] for row in cursor.fetchall()]
 
-            self.logger.debug(f"Tables in '{self.schema_name}': {', '.join(tables_list)}")
+            self.logger.debug(f"Tables in '{self.schema}': {', '.join(tables_list)}")
             if display:
                 if tables_list:
-                    print(f"Tables in '{self.schema_name}': {', '.join(tables_list)}")
+                    print(f"Tables in '{self.schema}': {', '.join(tables_list)}")
                 else:
-                    print(f"No tables found in schema '{self.schema_name}'.")
+                    print(f"No tables found in schema '{self.schema}'.")
 
             cursor.close()
             return tables_list
@@ -591,6 +598,10 @@ class DatabasePostgreSQL(Database):
         rows: list[dict]
             The rows retrieved from the table as a list of dictionaries.
         """
+
+        if self.conn is None:
+            self.connect_database(database=self.database, user=self.user, password=self.password)
+
         try:
             cursor = self.conn.cursor(cursor_factory=DictCursor)
 
@@ -667,6 +678,9 @@ class DatabasePostgreSQL(Database):
         >>> send_data(table_name="users", user_id=42, user_name="jdoe")
         """
         
+        if self.conn is None:
+            self.connect_database(database=self.database, user=self.user, password=self.password)
+
         try:
             cursor = self.conn.cursor()
             fields = ",".join(list(kwargs.keys()))
@@ -711,6 +725,9 @@ class DatabasePostgreSQL(Database):
         **kwargs
             Column-value pairs to update.
         """
+
+        if self.conn is None:
+            self.connect_database(database=self.database, user=self.user, password=self.password)
 
         try:
             cursor = self.conn.cursor()
@@ -764,9 +781,12 @@ class DatabasePostgreSQL(Database):
             self._rollback()
 
         return None
-
+    
 
     def raw_sql(self, SQL: str, VALUES: tuple[str]):
+
+        if self.conn is None:
+            self.connect_database(database=self.database, user=self.user, password=self.password)
 
         try:
             self.logger.warning(f"Running raw SQL query: {SQL}")
@@ -818,17 +838,18 @@ class DatabasePostgreSQL(Database):
             The path to the .sql or .json file.
         """
 
-        import os
+        if self.conn is None:
+            self.connect_database(database=self.database, user=self.user, password=self.password)
 
         if not os.path.isfile(file_path):
             self.logger.warning(f"File '{file_path}' does not exist.")
             return None
 
-        file_extension = os.path.splitext(file_path)[1]
 
         try:
             cursor = self.conn.cursor()
 
+            file_extension = os.path.splitext(file_path)[1]
             if file_extension == '.sql':
                 with open(file_path, 'r', encoding='utf-8') as sql_file:
                     sql_commands = sql_file.read()
