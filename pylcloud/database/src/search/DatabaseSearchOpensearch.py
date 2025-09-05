@@ -14,7 +14,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from .DatabaseSearch import DatabaseSearch
 
 
-class DatabaseOpensearch(DatabaseSearch):
+class DatabaseSearchOpensearch(DatabaseSearch):
     """
     OpenSearch Python API helper.
     Compatible with both open-source OpenSearch and AWS OpenSearch Service.

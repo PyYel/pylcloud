@@ -2,12 +2,14 @@
 
 from .src.Database import Database
 
-from .src.search.DatabaseSearchElasticsearch import DatabaseElasticsearch
-from .src.search.DatabaseSearchOpenSearch import DatabaseOpenSearch
+from .src.search.DatabaseSearchElasticsearch import DatabaseSearchElasticsearch
+from .src.search.DatabaseSearchOpensearch import DatabaseSearchOpensearch
 
-from .src.document.DatabaseDocumentMongoDB import DatabaseMongoDB
+from .src.document.DatabaseDocumentMongoDB import DatabaseDocumentMongoDB
 
-from .src.DatabaseMySQL import DatabaseMySQL
-from .src.DatabaseSQLite import DatabaseSQLite
-from .src.DatabasePostgreSQL import DatabasePostgreSQL
+from .src.relational.DatabaseRelationalMySQL import DatabaseRelationalMySQL
+from .src.relational.DatabaseRelationalSQLite import DatabaseRelationalSQLite
+from .src.relational.DatabaseRelationalPostgreSQL import DDatabaseRelationalPostgreSQL
 
+from .src.graph.DatabaseGraphJenafuseki import DatabaseGraphJenafuseki
+from .src.graph.DatabaseGraphNeo4j import DatabaseGraphNeo4j
