@@ -11,10 +11,10 @@ from requests_aws4auth import AWS4Auth
 warnings.filterwarnings('ignore', 'Connecting to .+ using TLS with verify_certs=False is insecure')
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-from .Database import Database
+from .DatabaseSearch import DatabaseSearch
 
 
-class DatabaseOpenSearch(Database):
+class DatabaseOpensearch(DatabaseSearch):
     """
     OpenSearch Python API helper.
     Compatible with both open-source OpenSearch and AWS OpenSearch Service.

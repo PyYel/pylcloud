@@ -3,11 +3,10 @@ import sys
 import os
 from typing import Union, Optional
 
+from .DatabaseRelational import DatabaseRelational
 
-from .Database import Database
 
-
-class DatabaseSQLite(Database):
+class DatabaseRelationalSQLite(DatabaseRelational):
     """
     A class that manages SQLite database operations.
     """

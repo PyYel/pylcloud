@@ -4,10 +4,10 @@ import json
 from typing import Union, Optional
 from mysql.connector import Error
 
-from .Database import Database
+from .DatabaseRelational import DatabaseRelational
 
 
-class DatabaseMySQL(Database):
+class DatabaseRelationalMySQL(DatabaseRelational):
     """
     A parent class that notably manages the global MySQL database server.
     """

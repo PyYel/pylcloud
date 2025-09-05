@@ -2,10 +2,10 @@ import os, sys
 from typing import Union, Optional
 
 
-from .Database import Database
+from .DatabaseDocument import DatabaseDocument
 
 
-class DatabaseMongoDB(Database):
+class DatabaseDocumentMongoDB(DatabaseDocument):
     """
     MongoDB Python API helper.
     """

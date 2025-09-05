@@ -9,10 +9,10 @@ import json
 import boto3
 import psycopg2._psycopg
 
-from .Database import Database
+from .DatabaseRelational import DatabaseRelational
 
 
-class DatabasePostgreSQL(Database):
+class DDatabaseRelationalPostgreSQL(DatabaseRelational):
     """
     A class to manage PostgreSQL databases (RDS, Aurora, local) with optional IAM authentication.
     """

@@ -22,6 +22,54 @@ class Database(ABC):
         return None
 
 
+    @abstractmethod
+    def connect_database(self, *args, **kwargs):
+        """
+        Connects to the database and creates a connector object. 
+        """
+        raise NotImplementedError
+
+
+    @abstractmethod
+    def disconnect_database(self, *args, **kwargs):
+        """
+        Closes the database linked to the connector ``conn``.
+        """
+        raise NotImplementedError
+
+
+    @abstractmethod    
+    def query_data(self, *args, **kwargs):
+        """
+        Retreives matching entries/records/documents from the DB.
+        """
+        raise NotImplementedError
+
+
+    @abstractmethod    
+    def send_data(self, *args, **kwargs):
+        """
+        Injects data into the DB by creating new entry/record/document.
+        """
+        raise NotImplementedError
+
+
+    @abstractmethod
+    def update_data(self, *args, **kwargs):
+        """
+        Updates the values of existing records matching the query.
+        """
+        raise NotImplementedError
+
+
+    @abstractmethod    
+    def delete_data(self, *args, **kwargs):
+        """
+        Deletes matching entries/records/documents from the DB.
+        """
+        raise NotImplementedError
+
+
     def _config_logger(self, 
                        logs_name: str, 
                        logs_dir: Optional[str] = None, 
@@ -63,95 +111,6 @@ class Database(ABC):
                 self.logger.info("Logging handler configured for file output.")
 
         return None
-
-
-    @abstractmethod
-    def connect_database(self, *args, **kwargs):
-        """
-        Connects to the database and creates a connector object. 
-        """
-        raise NotImplementedError
-
-
-    @abstractmethod
-    def _commit(self):
-        """
-        Commits the transactions operated since the last commit.
-        """
-        raise NotImplementedError
-
-
-    @abstractmethod
-    def _rollback(self):
-        """
-        roolbacks the transactions operated since the last commit.
-        """
-        raise NotImplementedError
-
-
-    @abstractmethod
-    def create_table(self, *args, **kwargs):
-        """
-        Creates a new index/collection.
-        """
-        raise NotImplementedError
-
-
-    @abstractmethod
-    def disconnect_database(self, *args, **kwargs):
-        """
-        Closes the database linked to the connector ``conn``.
-        """
-        raise NotImplementedError
-
-
-    @abstractmethod
-    def drop_table(self, *args, **kwargs):
-        """
-        Drops the matching indexes/collections on this cluster (database).
-        """
-        raise NotImplementedError
-
-    
-
-    @abstractmethod
-    def list_tables(self, *args, **kwargs):
-        """
-        Lists all the indexes/collections on this cluster (database).
-        """
-        raise NotImplementedError
-
-
-    @abstractmethod    
-    def query_data(self, *args, **kwargs):
-        """
-        Retreives matching entries/records/documents from the DB.
-        """
-        raise NotImplementedError
-
-
-    @abstractmethod    
-    def send_data(self, *args, **kwargs):
-        """
-        Injects data into the DB by creating new entry/record/document.
-        """
-        raise NotImplementedError
-
-
-    @abstractmethod
-    def update_data(self, *args, **kwargs):
-        """
-        Updates the values of existing records matching the query.
-        """
-        raise NotImplementedError
-
-
-    @abstractmethod    
-    def delete_data(self, *args, **kwargs):
-        """
-        Deletes matching entries/records/documents from the DB.
-        """
-        raise NotImplementedError
 
 
     def _hash_content(self, content: str, prefixes: list[str]):

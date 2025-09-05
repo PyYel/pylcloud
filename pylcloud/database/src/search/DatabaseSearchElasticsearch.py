@@ -9,10 +9,10 @@ import warnings
 warnings.filterwarnings('ignore', 'Connecting to .+ using TLS with verify_certs=False is insecure')
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-from .Database import Database
+from .DatabaseSearch import DatabaseSearch
 
 
-class DatabaseElasticsearch(Database):
+class DatabaseSearchElasticsearch(DatabaseSearch):
     """
     Elasticsearch Python API helper.
     """

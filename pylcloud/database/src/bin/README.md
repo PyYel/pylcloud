@@ -1,1 +1,0 @@
-These are bin and docker templates. They are not supposed to work by themselves, but lay down a fundation for database deployment.
