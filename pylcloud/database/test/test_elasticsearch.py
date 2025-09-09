@@ -4,10 +4,10 @@ DATABASE_DIR_PATH = os.path.dirname(os.path.dirname(__file__))
 if __name__ == "__main__":
     sys.path.append(os.path.dirname(DATABASE_DIR_PATH))
 
-from database import DatabaseElasticsearch
+from database import DatabaseSearchElasticsearch
 
 # Test import and init
-elasic_api = DatabaseElasticsearch()
+elasic_api = DatabaseSearchElasticsearch()
 
 print(elasic_api._hash_content(content='Message from Caroline: Merry Christmast!', prefixes=['2024/12/25', '103010']))
 # elasic_api.create_table(index_name="test")

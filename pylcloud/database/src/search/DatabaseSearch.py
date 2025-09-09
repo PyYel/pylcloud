@@ -16,9 +16,7 @@ class DatabaseSearch(Database):
         """
         Initializes the helper and its logging.
         """
-        super().__init__()
-
-        self._config_logger(logs_name=logs_name)
+        super().__init__(logs_name=logs_name)
 
         return None
 
