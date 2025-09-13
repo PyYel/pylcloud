@@ -113,7 +113,7 @@ class Database(ABC):
 
         return None
 
-    def _hash_content(content: str, prefixes: List[str], algo: str = "md5") -> str:
+    def _hash_content(self, content: str, prefixes: List[str], algo: str = "md5") -> str:
         """
         Hashes a document content into a unique id of format <prefixes>-<hashed_content>.
         Useful to automatically overwrite a stored document when a document with the same 
