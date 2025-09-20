@@ -12,7 +12,7 @@ import psycopg2._psycopg
 from .DatabaseRelational import DatabaseRelational
 
 
-class DDatabaseRelationalPostgreSQL(DatabaseRelational):
+class DatabaseRelationalPostgreSQL(DatabaseRelational):
     """
     A class to manage PostgreSQL databases (RDS, Aurora, local) with optional IAM authentication.
     """
@@ -72,8 +72,8 @@ class DDatabaseRelationalPostgreSQL(DatabaseRelational):
         rather be seen as a server, and a schema as a database.
             - A schema is a collection of tables
             - A database is a collection of schemas
-        - Database management is a rather uncommon operation. For a more streamlined usage of this helper, management is limited
-        to schema level.
+        - Database management is a rather uncommon operation. For a more streamlined usage of this helper, once connected, \
+        management is limited to schema level.
         """
         super().__init__(logs_name="DatabaseRelationalPostgreSQL")
 
@@ -90,6 +90,7 @@ class DDatabaseRelationalPostgreSQL(DatabaseRelational):
         self.aws_region_name = aws_region_name
         self.conn: psycopg2._psycopg.connection = None  # type: ignore
 
+        register_uuid()
         register_type(UNICODE) # Register UUID type
 
         return None
@@ -569,34 +570,37 @@ class DDatabaseRelationalPostgreSQL(DatabaseRelational):
         except Exception as e:
             self.logger.error(f"PostgreSQL error when listing tables: {e}")
             return []
-            
+
 
     def query_data(self,
                 SELECT: str,
                 FROM: str,
+                JOIN: Optional[Union[str, list[str], tuple[str]]] = None,
                 WHERE: Optional[Union[str, list[str], tuple[str]]] = None,
                 VALUES: Optional[Union[Any, list[Any], tuple[Any]]] = None,
                 LIKE: Optional[Union[str, list[str], tuple[Any]]] = None):
         """
-        Selects data from a PostgreSQL table with optional filtering.
+        Selects data from a PostgreSQL table with optional JOIN and filtering.
 
         Parameters
         ----------
-        SELECT: str
+        SELECT : str
             The columns to select in SQL syntax.
-        FROM: str
+        FROM : str
             The name of the table to select data from.
-        WHERE: Optional[str or list]
-            The column name(s) for the WHERE condition.
-        VALUES: Optional[Any or list]
-            The value(s) to use for exact matching in the WHERE condition.
-        LIKE: Optional[str or list]
-            The pattern(s) to use for LIKE matching in the WHERE condition.
+        JOIN : str or list, optional
+            One or more JOIN clauses (e.g. "JOIN table2 t2 ON t1.id = t2.id").
+        WHERE : str or list, optional
+            Column name(s) for WHERE condition.
+        VALUES : Any or list, optional
+            Value(s) for exact matching in WHERE.
+        LIKE : str or list, optional
+            Pattern(s) for LIKE matching in WHERE.
 
         Returns
         -------
-        rows: list[dict]
-            The rows retrieved from the table as a list of dictionaries.
+        rows : list[dict]
+            Rows retrieved as a list of dicts.
         """
 
         if self.conn is None:
@@ -605,58 +609,51 @@ class DDatabaseRelationalPostgreSQL(DatabaseRelational):
         try:
             cursor = self.conn.cursor(cursor_factory=DictCursor)
 
-            # Basic SELECT
-            if WHERE is None:
+            sql_parts = [f"SELECT {SELECT}", f"FROM {FROM}"]
 
-                cursor.execute(f"SELECT {SELECT} FROM {FROM};")
-                rows = [dict(row) for row in cursor.fetchall()]
+            if JOIN is not None:
+                joins = [f"JOIN {JOIN}"] if isinstance(JOIN, str) else list(f"JOIN {JOIN}")
+                sql_parts.extend(joins)
 
-                cursor.close()
-                return rows
+            where_clause = ""
+            params = []
 
-            # WHERE exact match
+            # If exact value query
             if VALUES is not None:
-
                 where_cols = [WHERE] if isinstance(WHERE, str) else WHERE
                 values = [VALUES] if not isinstance(VALUES, (list, tuple)) else VALUES
-                if len(where_cols) != len(values):
-                    self.logger.warning("Number of WHERE columns must match number of LIKE patterns.")
+                if len(where_cols) != len(values): # type: ignore
+                    self.logger.warning("Number of WHERE columns must match number of VALUES.")
                     cursor.close()
                     return []
+                where_clause = " AND ".join([f"{col} = %s" for col in where_cols]) # type: ignore
+                params = values
 
-                where_clause = " AND ".join([f"{col} = %s" for col in where_cols])
-                sql_query = f"SELECT {SELECT} FROM {FROM} WHERE {where_clause};"
-                cursor.execute(sql_query, values)
-                rows = [dict(row) for row in cursor.fetchall()]
-
-                cursor.close()
-                return rows
-
-            # WHERE LIKE pattern
-            if LIKE is not None:
-
+            # If like value query
+            elif LIKE is not None:
                 where_cols = [WHERE] if isinstance(WHERE, str) else WHERE
                 like_patterns = [LIKE] if not isinstance(LIKE, (list, tuple)) else LIKE
-                if len(where_cols) != len(like_patterns):
+                if len(where_cols) != len(like_patterns): # type: ignore
                     self.logger.warning("Number of WHERE columns must match number of LIKE patterns.")
                     cursor.close()
                     return []
+                where_clause = " AND ".join([f"{col} LIKE %s" for col in where_cols]) # type: ignore
+                params = like_patterns
 
-                where_clause = " AND ".join([f"{col} LIKE %s" for col in where_cols])
-                sql_query = f"SELECT {SELECT} FROM {FROM} WHERE {where_clause};"
-                cursor.execute(sql_query, like_patterns)
-                rows = [dict(row) for row in cursor.fetchall()]
+            if where_clause:
+                sql_parts.append(f"WHERE {where_clause}")
 
-                cursor.close()
-                return rows
+            sql_query = " ".join(sql_parts) + ";"
+            self.logger.debug(sql_query)
+            cursor.execute(sql_query, params)
+            rows = [dict(row) for row in cursor.fetchall()]
 
             cursor.close()
-            return []
+            return rows
 
         except psycopg2.Error as e:
             self.logger.error(f"PostgreSQL error when selecting data: {e}")
             return []
-
         except Exception as e:
             self.logger.error(f"Unexpected error when selecting data: {e}")
             return []
