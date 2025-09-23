@@ -19,22 +19,19 @@ class DatabaseRelational(Database):
 
         return None
 
-
     @abstractmethod
-    def _commit(self):
+    def _get_connection(self):
         """
-        Commits the transactions operated since the last commit.
+        Provides an active connection for the upcoming query, ensures alive connections.
         """
         raise NotImplementedError
-
-
+    
     @abstractmethod
-    def _rollback(self):
+    def _clear_connection(self):
         """
-        roolbacks the transactions operated since the last commit.
+        Closes all connection and clears the connection pool, acting as a disconnect from the DB.
         """
         raise NotImplementedError
-
 
     @abstractmethod
     def create_table(self, *args, **kwargs):
@@ -53,8 +50,8 @@ class DatabaseRelational(Database):
     
 
     @abstractmethod
-    def list_tables(self, *args, **kwargs):
+    def execute_file(self, *args, **kwargs):
         """
-        Lists all the indexes/collections on this cluster (database).
+        Runs a SQL file.
         """
         raise NotImplementedError

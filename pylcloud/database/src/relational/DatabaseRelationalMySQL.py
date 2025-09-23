@@ -127,20 +127,19 @@ class DatabaseRelationalMySQL(DatabaseRelational):
 
     def create_table(self, table_name: str, column_definitions: list[str]):
         """
-        Creates a table in a MySQL database.
+        Creates a table in the PostgreSQL database.
 
         Parameters
         ----------
         table_name: str
-            The name of the table to create. If it already exists, you will need to delete it beforehand,
-            as this won't overwrite any existing table.
-        columns_definitions: list[str]
-            The SQL synthax of a column definition, i.e, a list of string where each item is formatted as
-            'column_name dtype constraint' (cf. example).
+            Name of the table to create
+        column_definitions: list[str]
+            List of column definitions (e.g., ["id SERIAL PRIMARY KEY", "name VARCHAR(100) NOT NULL"])
 
-        Example
+        Returns
         -------
-        >>> self.create_table('users', ['username VARCHAR(12) PRIMARY KEY', 'password VARCHAR(100) NOT NULL'])
+        bool
+            True if table was created or already exists and is accessible, False otherwise
         """
         def _check_table_exists(table_name):
             try:

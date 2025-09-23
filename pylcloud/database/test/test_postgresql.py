@@ -12,13 +12,12 @@ from database import DatabaseRelationalPostgreSQL
 
 # Test import and init
 if "local" in sys.argv:    
-    db = DatabaseRelationalPostgreSQL(host="localhost", schema_name="test-db", user="admin", password="password")
-    db.list_databases(display=True)
-    db.list_tables(display=True)
-    # db.create_database(schema_name="test-db")
-    # db.connect_database(schema_name="test-db")
-    db.create_table(table_name="test", column_definitions=["id_field", "value-field"])
-    # db.execute_file(file_path=os.path.join(os.path.dirname(__file__), "postgres_setup.sql"))
+    db = DatabaseRelationalPostgreSQL(host="localhost", schema="public", user="admin", password="password", database="postgres")
+    db._init_db()
+    db.describe(display=True)
+    db.create_table(table_name="test", column_definitions=["id_field", "forbidden-field-format"])
+    db.create_table(table_name="test", column_definitions=["id SERIAL PRIMARY KEY", "name VARCHAR(100) NOT NULL"])
+    db.describe(display=True)
 
 if "aws" in sys.argv:
     # Direct connect as root

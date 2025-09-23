@@ -23,22 +23,6 @@ class Database(ABC):
         return None
 
 
-    @abstractmethod
-    def connect_database(self, *args, **kwargs):
-        """
-        Connects to the database and creates a connector object. 
-        """
-        raise NotImplementedError
-
-
-    @abstractmethod
-    def disconnect_database(self, *args, **kwargs):
-        """
-        Closes the database linked to the connector ``conn``.
-        """
-        raise NotImplementedError
-
-
     @abstractmethod    
     def query_data(self, *args, **kwargs):
         """
@@ -71,6 +55,14 @@ class Database(ABC):
         raise NotImplementedError
 
 
+    @abstractmethod
+    def describe():
+        """
+        High level database description.
+        """
+        raise NotImplementedError
+    
+
     def _config_logger(self, 
                        logs_name: str, 
                        logs_dir: Optional[str] = None, 
@@ -81,8 +73,8 @@ class Database(ABC):
         is the default behaviour. See ``custom_config()`` to override the parameters.
         """
 
-        if logs_dir is None:
-            logs_dir = os.path.join(os.getcwd(), "logs", str(datetime.now().strftime("%Y-%m-%d")))
+        if logs_level not in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:  logs_level="INFO"
+        if logs_dir is None: logs_dir = os.path.join(os.getcwd(), "logs", str(datetime.now().strftime("%Y-%m-%d")))
         os.makedirs(logs_dir, exist_ok=True)
 
         self.logger = logging.getLogger(logs_name)
