@@ -9,7 +9,7 @@ from .src.document.DatabaseDocumentMongoDB import DatabaseDocumentMongoDB
 
 from .src.relational.DatabaseRelationalMySQL import DatabaseRelationalMySQL
 from .src.relational.DatabaseRelationalSQLite import DatabaseRelationalSQLite
-from .src.relational.DatabaseRelationalPostgreSQL import DDatabaseRelationalPostgreSQL
+from .src.relational.DatabaseRelationalPostgreSQL import DatabaseRelationalPostgreSQL
 
 from .src.graph.DatabaseGraphJenafuseki import DatabaseGraphJenafuseki
 from .src.graph.DatabaseGraphNeo4j import DatabaseGraphNeo4j
