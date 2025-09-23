@@ -373,7 +373,6 @@ class DDatabaseRelationalPostgreSQL(DatabaseRelational):
         return None
 
 
-
     def disconnect_database(self):
         """
         Closes the database connection.
@@ -435,6 +434,10 @@ class DDatabaseRelationalPostgreSQL(DatabaseRelational):
         """
         See ``drop_schema()``.
         """
+
+        if self.conn is None:
+            self.connect_database(database=self.database, user=self.user, password=self.password)
+
         self.logger.debug("Drop database not allowed. Drop schemas instead.")
         return self.drop_schema(schema=schema)
 
