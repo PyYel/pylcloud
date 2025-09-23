@@ -1,6 +1,6 @@
 import os, sys
-from typing import Union, Optional, Sequence
-from elasticsearch import Elasticsearch, helpers, NotFoundError
+from typing import Union, Optional, Sequence, Any
+from elasticsearch import Elasticsearch, helpers, NotFoundError, RequestError
 import json
 import urllib3
 import warnings
@@ -364,63 +364,163 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
 
 
     def similarity_search(self, index_name: str, 
-                          query_vector: list[float], 
+                          query_vector: list[float] = None,
+                          query_text: str = None,
                           must_pairs: list[dict[str, str]] = [], 
                           should_pairs: list[dict[str, str]] = [],
-                          k: int = 5):
+                          vector_field: str = "chunk_vector",
+                          text_field: str = "chunk_content",
+                          vector_weight: float = 0.7,
+                          text_weight: float = 0.3,
+                          initial_k: int = 20,
+                          final_k: int = 5
+                          ) -> list[dict[str, Any]]:
         """
-        Performs k-NN similarity search in Elasticsearch.
+        Performs hybrid search in Elasticsearch combining vector similarity and text matching.
 
         Parameters
         ----------
         index_name : str
             The Elasticsearch index to search in.
-        query_vector : list
+        query_vector : list[float], optional
             The vector representation of the input query.
-        k : int, optional
+        query_text : str, optional
+            The text query for keyword matching.
+        must_pairs : list[dict[str, str]], optional
+            List of field-value pairs that must match in the query.
+        should_pairs : list[dict[str, str]], optional
+            List of field-value pairs that should match in the query.
+        vector_field : str, optional
+            The field containing the vector embeddings (default is "chunk.vector").
+        text_field : str, optional
+            The field containing the text content (default is "chunk.content").
+        vector_weight : float, optional
+            Weight for the vector similarity component (default is 0.7).
+        text_weight : float, optional
+            Weight for the text matching component (default is 0.3).
+        initial_k : int, optional
+            The wideness of the search, before reranking logic (default is 20).
+        final_k: int, optional
             The number of closest matches to return (default is 5).
 
         Returns
         -------
-        list
-            A list of retrieved documents sorted by similarity.
+        documents: list[dict[str, Any]]
+            A list of retrieved documents sorted by combined similarity.
         """
 
+        if query_vector is None and query_text is None:
+            error_msg = "Either query_vector or query_text must be provided"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        if final_k > initial_k: 
+            final_k = initial_k
+            self.logger.warning("Hybrid search 'final_k' should be smaller than 'initial_k'.")
+
+        self.logger.debug(f"Starting hybrid search on index '{index_name}' with k={initial_k}")
+
+        # Build must conditions
         must_conditions = []
         for must_pair in must_pairs:
             must_conditions.append({"term": must_pair})
 
+        # Build should conditions
         should_conditions = []
         for should_pair in should_pairs:
             should_conditions.append({"term": should_pair})
 
+        # Create the query structure
         query = {
-            "size": k,
+            "size": initial_k,
             "query": {
                 "bool": {
-                    # Additionnal condition are required to reduce the knn scope, such as limiting it to a specific workspace_name
                     "must": must_conditions,
                     "should": should_conditions,
-                    # At least 1 should condition must be matched. When there is no should condition input, the minimum must be set to zero
                     "minimum_should_match": 1 if should_conditions else 0,
-                    "filter": {
-                        "knn": {
-                            "field": "chunk.vector",
-                            "query_vector": query_vector,
-                            "k": k,
-                        }
-                    }
                 }
             }
         }
 
+        # Add vector search if query_vector is provided
+        if query_vector is not None:
+            if not isinstance(query_vector, list) or not all(isinstance(x, (int, float)) for x in query_vector):
+                self.logger.error("Similarity search 'query_vector' must be a list of numbers.")
+                return []
+
+            self.logger.debug(f"Adding vector search component with weight {vector_weight}")
+
+            # Add kNN query with weight
+            if "should" not in query["query"]["bool"]:
+                query["query"]["bool"]["should"] = []
+
+            query["query"]["bool"]["should"].append({
+                "script_score": {
+                    "query": {"match_all": {}},
+                    "script": {
+                        "source": f"knn_score({vector_field}, params.query_vector) * params.weight",
+                        "params": {
+                            "query_vector": query_vector,
+                            "weight": vector_weight
+                        }
+                    }
+                }
+            })
+
+        # Add text search if query_text is provided
+        if query_text is not None:
+            if not isinstance(query_text, str):
+                error_msg = "query_text must be a string"
+                self.logger.error(error_msg)
+                raise TypeError(error_msg)
+
+            self.logger.debug(f"Adding text search component with weight {text_weight}")
+
+            # Add text query with weight
+            if "should" not in query["query"]["bool"]:
+                query["query"]["bool"]["should"] = []
+
+            query["query"]["bool"]["should"].append({
+                "script_score": {
+                    "query": {
+                        "match": {
+                            text_field: {
+                                "query": query_text,
+                                "fuzziness": "AUTO"
+                            }
+                        }
+                    },
+                    "script": {
+                        "source": f"_score * params.weight",
+                        "params": {
+                            "weight": text_weight
+                        }
+                    }
+                }
+            })
+
+        # Ensure we match something if both vector and text components are used
+        if query_vector is not None and query_text is not None:
+            query["query"]["bool"]["minimum_should_match"] = 1
+
         try:
+            self.logger.debug(f"Executing hybrid search query: {query}")
             response = self.es.search(index=index_name, body=query)
             documents = [hit for hit in response['hits']['hits']]
-            self.logger.debug(f"Vector search found {len(documents)} matching documents.")
-            return documents
+            self.logger.info(f"Hybrid similarity search found {len(documents)} matching documents, returning top {final_k} scorers.")
+            return documents[:final_k]
+        
+        except ConnectionError as e:
+            self.logger.error(f"Connection error during search: {str(e)}")
+            return []
+        except RequestError as e:
+            self.logger.error(f"Invalid query error: {str(e)}")
+            return []
+        except NotFoundError as e:
+            self.logger.error(f"Index '{index_name}' not found: {str(e)}")
+            return []
         except Exception as e:
-            self.logger.error(f"Error: An error occurred: {e}")
+            self.logger.error(f"Unexpected error during hybrid similarity search: {str(e)}")
             return []
 
 
