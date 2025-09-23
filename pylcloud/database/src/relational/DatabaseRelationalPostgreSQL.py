@@ -280,7 +280,9 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             return {}
 
         finally:
-            self.pool.putconn(conn)
+            if conn is not None:
+                self.pool.putconn(conn)
+
 
 
 
@@ -328,7 +330,9 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             return False
         
         finally:
-            self.pool.putconn(conn)
+            if conn is not None:
+                self.pool.putconn(conn)
+
 
 
     def drop_table(self, table_name: str) -> bool:
@@ -349,7 +353,9 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             return False
         
         finally:
-            self.pool.putconn(conn)
+            if conn is not None:
+                self.pool.putconn(conn)
+
 
 
     def drop_schema(self, schema: str) -> bool:
@@ -365,7 +371,9 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             self.logger.error(f"PostgreSQL error when dropping schema: {e}")
             return False
         finally:
-            self.pool.putconn(conn)
+            if conn is not None:
+                self.pool.putconn(conn)
+
 
 
     def delete_data(self,
@@ -412,7 +420,9 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             return False
         
         finally:
-            self.pool.putconn(conn)
+            if conn is not None:
+                self.pool.putconn(conn)
+
 
 
     def query_data(self,
@@ -428,7 +438,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         """
         conn = None
         try:
-            conn = self.get_connection()
+            conn = self._get_connection()
             with conn.cursor(cursor_factory=DictCursor) as cursor:
 
                 sql_parts = [f"SELECT {SELECT}", f"FROM {FROM}"]
@@ -473,7 +483,9 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             return []
 
         finally:
-            self.pool.putconn(conn)
+            if conn is not None:
+                self.pool.putconn(conn)
+
 
 
     def send_data(self, table_name: str, **kwargs):
@@ -486,7 +498,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
 
         conn = None
         try:
-            conn = self.get_connection()
+            conn = self._get_connection()
             with conn.cursor() as cursor:
                 fields = ",".join(kwargs.keys())
                 placeholders = ",".join(["%s"] * len(kwargs))
@@ -502,7 +514,10 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             self.logger.error(f"PostgreSQL error when inserting data into '{table_name}': {e}")
 
         finally:
-            self.pool.putconn(conn)
+            if conn is not None:
+                self.pool.putconn(conn)
+
+
 
 
 
@@ -521,7 +536,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
 
         conn = None
         try:
-            conn = self.get_connection()
+            conn = self._get_connection()
             with conn.cursor() as cursor:
 
                 # SET clause
@@ -566,7 +581,8 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             self.logger.error(f"PostgreSQL error when updating data in '{table_name}': {e}")
 
         finally:
-            self.pool.putconn(conn)
+            if conn is not None:
+                self.pool.putconn(conn)
 
 
 
@@ -603,7 +619,9 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             return []
 
         finally:
-            self.pool.putconn(conn)
+            if conn is not None:
+                self.pool.putconn(conn)
+
 
 
 
@@ -669,7 +687,9 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             self.logger.error(f"Error executing file '{file_path}': {e}")
 
         finally:
-            self.pool.putconn(conn)
+            if conn is not None:
+                self.pool.putconn(conn)
+
 
 
     def _init_db(
@@ -719,7 +739,9 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         except Exception as e:
             self.logger.error(f"Error creating database '{database}': {e}", exc_info=True)
         finally:
-            self.pool.putconn(conn)  # release back to pool
+            if conn is not None:
+                self.pool.putconn(conn)
+  # release back to pool
 
         # 2. Connect to target database normally
         conn = self._get_connection(database=database, user=master_user, password=master_password)
