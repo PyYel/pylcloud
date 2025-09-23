@@ -8,11 +8,11 @@ if __name__ == "__main__":
 
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(DATABASE_DIR_PATH)), ".env"))
 
-from database import DatabasePostgreSQL
+from database import DatabaseRelationalPostgreSQL
 
 # Test import and init
 if "local" in sys.argv:    
-    db = DatabasePostgreSQL(host="localhost", schema_name="test-db", user="admin", password="password")
+    db = DatabaseRelationalPostgreSQL(host="localhost", schema_name="test-db", user="admin", password="password")
     db.list_databases(display=True)
     db.list_tables(display=True)
     # db.create_database(schema_name="test-db")
@@ -22,7 +22,7 @@ if "local" in sys.argv:
 
 if "aws" in sys.argv:
     # Direct connect as root
-    # db = DatabasePostgreSQL(schema_name=os.getenv("RDS_SCHEMA", ""),
+    # db = DatabaseRelationalPostgreSQL(schema_name=os.getenv("RDS_SCHEMA", ""),
     #                         host=os.getenv("RDS_HOST", ""),
     #                         user=os.getenv("RDS_USER", ""),
     #                         password=os.getenv("RDS_PASSWORD"),
@@ -36,7 +36,7 @@ if "aws" in sys.argv:
     # db.list_schemas(display=True)
 
     # Standard connect for AWS RDS using IAM User auth
-    db = DatabasePostgreSQL(schema_name="test-db",
+    db = DatabaseRelationalPostgreSQL(schema_name="test-db",
                             host=os.getenv("RDS_HOST", ""),
                             user="RDSUser", # For an existing IAM user named 'RDSUser'
                             password=None, # None implies an IAM auth
