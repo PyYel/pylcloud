@@ -8,31 +8,27 @@ from uuid import uuid4
 import base64
 import os, sys
 from io import BytesIO
-from typing import List, Union
+from typing import List, Union, Any
 import boto3
-from typing import Generator
+# from typing import Generator
+from collections.abc import Generator
 
 
 from gpt import GPT
-from constants import AWS_ACCESS_KEY_SECRET, AWS_ACCESS_KEY_ID, AWS_REGION_NAME
+from constants import AWS_ACCESS_KEY_SECRET, AWS_ACCESS_KEY_ID, AWS_REGION_NAME, LOGS_DIR
 
 
 class GPTAWS(GPT):
     """
     An helper that simplifies calls to LLM API.
     """
-    def __init__(self, 
-                 model_name: str,
-                 session_id: str = str(uuid4()),
-                 temperature: float = 0.1,
-                 max_tokens: int = 500,
-                 **kwargs):
+    def __init__(self, **kwargs):
         """
         Initializes a self-contained connection to the AWS Bedrock API.
 
         This only supports generative AI. 
         """
-        super().__init__(model_name=model_name, session_id=session_id, temperature=temperature, max_tokens=max_tokens)
+        super().__init__(logs_name="GPTAWS", logs_dir=LOGS_DIR)
     
         
         self.bedrock_client = boto3.client(service_name="bedrock",
@@ -47,6 +43,49 @@ class GPTAWS(GPT):
                                                     region_name=AWS_REGION_NAME,)
                                                     # aws_session_token=aws_session_token)
 
+        self.available_models = {
+            "claude-4-sonnet": {
+                "model_id": "eu.anthropic.claude-sonnet-4-20250514-v1:0" if AWS_REGION_NAME.startswith("eu") else "anthropic.claude-sonnet-4-20250514-v1:0", 
+                "anthropic_version": "bedrock-2023-05-31"
+                },
+            "claude-3-haiku": {
+                "model_id": "anthropic.claude-3-haiku-20240307-v1:0", 
+                "anthropic_version": "bedrock-2023-05-31" # TODO: check old models versions and inference profiles
+                },
+            "nova-micro": {
+                "model_id": "eu.amazon.nova-micro-v1:0" if AWS_REGION_NAME.startswith("eu") else "amazon.nova-micro-v1:0", 
+                },
+            "nova-lite": {
+                "model_id": "eu.amazon.nova-lite-v1:0" if AWS_REGION_NAME.startswith("eu") else "amazon.nova-lite-v1:0", 
+                },
+            "nova-pro": {
+                "model_id": "eu.amazon.nova-pro-v1:0" if AWS_REGION_NAME.startswith("eu") else "amazon.nova-pro-v1:0",
+                }
+            }
+
+        self.costs = {
+            "claude-4-sonnet": {
+                "input_tokens": 0.003*1e-3,
+                "output_tokens": 0.015*1e-3
+                },
+            "claude-3-haiku": {
+                "input_tokens": 0.00025*1e-3,
+                "output_tokens": 0.00125*1e-3
+                },
+            "nova-micro": {
+                "input_tokens": 0.000052*1e-3,
+                "output_tokens": 0.000208*1e-3
+                },
+            "nova-lite": {
+                "input_tokens": 0.000088*1e-3,
+                "output_tokens": 0.000352*1e-3
+                },
+            "nova-pro": {
+                "input_tokens": 0.00118*1e-3,
+                "output_tokens": 0.00472*1e-3
+                }
+            }
+
         return None
 
 
@@ -54,77 +93,13 @@ class GPTAWS(GPT):
                      model_name: str, 
                      user_prompt: str, 
                      system_prompt: str = "", 
+                     assistant_prompt: str = "",
+                     messages: list[dict[str, Any]] = [],
                      files: List[Union[str, BytesIO]] = [], 
                      max_tokens: int = 512,
-                     temperature: int = 1,
-                     top_k: int = 250,
-                     top_p: float = 0.999,
-                     display: bool = False):
-        """
-        Function to interact with an AWS Bedrock model using boto3.
-
-        Parameters
-        ----------
-        model_id: str
-            The ID of the model in AWS Bedrock to invoke. 
-            See ``list_fundation_models()`` for the exact ID name.
-        prompt_text: str 
-            The input text to send to the model.
-        display: bool, False
-            Whereas to print in the terminal the model response, or not.
-
-        Returns
-        -------
-        response_body: dict
-            Response from the AWS Bedrock model.
-
-        Notes
-        -----
-        - Selected ``model`` must be one of:
-            - 'claude-3.5-sonnet'
-            - 'claude-3.7-sonnet'
-            - 'claude-3-huaiku'
-            - 'claude-3-sonnet'
-
-        """
-
-        model_id = self.available_models[model_name]["model_id"]
-
-        payload = self._create_payload(model_name=model_name,
-                                       user_prompt=user_prompt,
-                                       system_prompt=system_prompt,
-                                       files=files,
-                                       temperature=temperature,
-                                       top_k=top_k,
-                                       top_p=top_p,
-                                       max_tokens=max_tokens)
-        
-        response = self.bedrock_runtime_client.invoke_model(
-            modelId=model_id,
-            accept='application/json',  
-            contentType='application/json',  
-            body=payload
-        )
-        
-        response_body = json.loads(response['body'].read())
-        text = response_body["content"][0]["text"]
-        usage = response_body["usage"]
-
-        if display: print(text)
-
-        return {"text": text, "usage": usage}
-        
-
-    def yield_query(self, 
-                     model_name: str, 
-                     user_prompt: str, 
-                     system_prompt: str = "", 
-                     files: List[Union[str, BytesIO]] = [], 
-                     max_tokens: int = 512,
-                     temperature: int = 1,
-                     top_k: int = 250,
-                     top_p: float = 0.999,
-                     display: bool = False):
+                     temperature: float = 0.9,
+                     top_k: int = 32,
+                     top_p: float = 0.7) -> Union[dict, dict[str, Union[str, int]]]:
         """
         Function to interact with an AWS Bedrock model using boto3.
 
@@ -137,12 +112,14 @@ class GPTAWS(GPT):
             The user's input text to send to the model.
         system_prompt: str 
             The system text to send to the model.
+        assistant_prompt: str 
+            Text sent as a previous assistant response. Usefull for providing context.
         files: list[str|BytesIO], []
             The list of files to add to the payload. Can be local paths, binary files, or both. Supports only images.
             TODO: add other file types.
         display: bool, False
             Whereas to print in the terminal the model response, or not.
-
+ 
         Returns
         -------
         response_body: dict
@@ -151,45 +128,151 @@ class GPTAWS(GPT):
         Notes
         -----
         - Selected ``model_name`` must be one of:
-            - 'claude-3.5-sonnet'
-            - 'claude-3.7-sonnet'
+            - 'claude-4-sonnet'
             - 'claude-3-haiku'
-            - 'claude-3-sonnet'
+            - 'nova-micro'
+            - 'nova-lite'
+            - 'nova-pro'
+
+        Examples
+        --------
+        >>> print(return_query(model_name='nova-lite', user_prompt='who are you?'))
+        >>> {'text': 'I am AWS Nova', 'usage': {'input_tokens': 5, 'output_tokens': 8}}
         """
 
+        try:
+            
+            model_id = self.available_models[model_name]["model_id"]
 
-        model_id = self.available_models[model_name]["model_id"]
+            payload = self._create_payload(model_name=model_name,
+                                            user_prompt=user_prompt,
+                                            system_prompt=system_prompt,
+                                            assistant_prompt=assistant_prompt,
+                                            messages=messages,
+                                            files=files,
+                                            temperature=temperature,
+                                            top_k=top_k,
+                                            top_p=top_p,
+                                            max_tokens=max_tokens)
+            
+            response = self.bedrock_runtime_client.invoke_model(
+                modelId=model_id,
+                accept='application/json',  
+                contentType='application/json',  
+                body=json.dumps(payload)
+            )
+            
+            response_body = json.loads(response['body'].read())
+            if "claude" in model_name:
+                text = response_body["content"][0]["text"]
+                usage = response_body["usage"]
+            elif "nova" in model_name:
+                text = response_body["output"]["message"]["content"][0]["text"]
+                usage = response_body["usage"]
+            else:
+                self.logger.warning(f"Invalid model name '{model_name}'.")
+                return {}
 
-        payload = self._create_payload(model_name=model_name,
-                                       user_prompt=user_prompt,
-                                       system_prompt=system_prompt,
-                                       files=files,
-                                       temperature=temperature,
-                                       top_k=top_k,
-                                       top_p=top_p,
-                                       max_tokens=max_tokens)
+            return {"text": text, "usage": usage}
         
-        response = self.bedrock_runtime_client.invoke_model_with_response_stream(
-            modelId=model_id,
-            accept='application/json',  
-            contentType='application/json',  
-            body=payload
-        )
-        
-        text = ""
-        for event in response["body"]:
-            chunk = json.loads(event["chunk"]["bytes"])
-            if chunk["type"] == "content_block_delta":
-                if display: print(chunk["delta"].get("text", ""), end="")
-                text += chunk["delta"].get("text", "")
-                yield chunk["delta"].get("text", "")
-            elif chunk["type"] == "message_stop":
-                usage = {
-                    "input_tokens": chunk["amazon-bedrock-invocationMetrics"].get("inputTokenCount", ""),
-                    "output_tokens": chunk["amazon-bedrock-invocationMetrics"].get("outputTokenCount", ""),
-                }
-                yield {"text": text, "usage": usage}
-        
+        except Exception as e:
+            self.logger.error(e)
+            return {}
+
+
+    def yield_query(self, 
+                    model_name: str, 
+                    user_prompt: str, 
+                    system_prompt: str = "", 
+                    assistant_prompt: str = "",
+                    files: List[Union[str, BytesIO]] = [], 
+                    max_tokens: int = 512,
+                    temperature: float = 0.9,
+                    top_k: int = 32,
+                    top_p: float = 0.7) -> Union[dict, Generator[dict[str, Union[str, int]]]]:
+        """
+        Function to interact with an AWS Bedrock model using boto3.
+
+        Parameters
+        ----------
+        model_name: str
+            The human readable name of the model in AWS Bedrock to invoke. 
+            See ``list_models()`` for the exact ID name. See the note below for the models names.
+        user_prompt: str 
+            The user's input text to send to the model.
+        system_prompt: str 
+            The system text to send to the model.
+        assistant_prompt: str 
+            Text sent as a previous assistant response. Usefull for providing context.
+        files: list[str|BytesIO], []
+            The list of files to add to the payload. Can be local paths, binary files, or both. Supports only images.
+            TODO: add other file types.
+        display: bool, False
+            Whereas to print in the terminal the model response, or not.
+ 
+        Yields
+        -------
+        item: str
+            The current iterrated token, as string.
+        final_item: dict[str, Any]
+            The final response containing the whole generation result and its metadata. 
+
+        Notes
+        -----
+        - Selected ``model_name`` must be one of:
+            - 'claude-4-sonnet'
+            - 'claude-3-haiku'
+            - 'nova-micro'
+            - 'nova-lite'
+            - 'nova-pro'
+
+        Examples
+        --------
+        >>> for token in yield_query(model_name='nova-micro', user_prompt='Who are you?'): print(token)
+        >>>     'I am'
+        >>>     'AWS'
+        >>>     'Nova'
+        >>>     {'text': 'I am AWS Nova', 'usage': {'input_tokens': 5, 'output_tokens': 8}}
+        """
+
+        try:
+                
+            model_id = self.available_models[model_name]["model_id"]
+
+            payload = self._create_payload(model_name=model_name,
+                                            user_prompt=user_prompt,
+                                            system_prompt=system_prompt,
+                                            assistant_prompt=assistant_prompt,
+                                            files=files,
+                                            temperature=temperature,
+                                            top_k=top_k,
+                                            top_p=top_p,
+                                            max_tokens=max_tokens)
+            
+            response = self.bedrock_runtime_client.invoke_model_with_response_stream(
+                modelId=model_id,
+                accept='application/json',  
+                contentType='application/json',  
+                body=json.dumps(payload)
+            )
+            
+            text = ""
+            for event in response["body"]:
+                chunk = json.loads(event["chunk"]["bytes"])
+                if chunk["type"] == "content_block_delta":
+                    text += chunk["delta"].get("text", "")
+                    yield chunk["delta"].get("text", "")
+                elif chunk["type"] == "message_stop":
+                    usage = {
+                        "input_tokens": chunk["amazon-bedrock-invocationMetrics"].get("inputTokenCount", ""),
+                        "output_tokens": chunk["amazon-bedrock-invocationMetrics"].get("outputTokenCount", ""),
+                    }
+                    yield {"text": text, "usage": usage}
+            
+        except Exception as e:
+            self.logger.error(e)
+            return {}
+
 
     def list_models(self, display: bool = False):
         """
@@ -217,17 +300,18 @@ class GPTAWS(GPT):
                         model_name: str, 
                         user_prompt: str, 
                         system_prompt: str = "", 
-                        files: list[BytesIO] = [], 
-                        temperature: int = 1,
-                        top_k: int = 250,
-                        top_p: float = 0.999,
+                        assistant_prompt: str = "",
+                        messages: list[dict[str, Any]] = [],
+                        files: list[Union[str, BytesIO]] = [], 
+                        temperature: float = 0.9,
+                        top_k: int = 32,
+                        top_p: float = 0.8,
                         max_tokens: int = 512):
         """
         Formats a payload that respects the API models.
         """
-
-        def _create_claude_payload():
-            
+        
+        def _anthropic():
             content = [
                 {
                     "type": "image",
@@ -237,7 +321,7 @@ class GPTAWS(GPT):
                         "data": file
                     }
                 }
-                for file in self._process_files(files=files)
+                for file in self._process_files(files=files) if model_name not in ["nova-micro"]
             ]
             content.append(
                 {
@@ -246,37 +330,69 @@ class GPTAWS(GPT):
                 }
             )
             payload = {
-                "anthropic_version": self.available_models[model_name]["anthropic_version"], 
+                "anthropic_version": self.available_models[model_name]["anthropic_version"],
                 "max_tokens": max_tokens,
                 "stop_sequences": [],
                 "temperature": temperature,
                 "top_p": top_p,
                 "top_k": top_k,
                 "system": system_prompt,
-                "messages": [
+                "messages": messages + [
                     {
                         "role": "user",
                         "content": content
+                    },
+                    {
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": assistant_prompt}]
                     }
                 ]
             }
+            return payload
 
-            return payload 
-        
-        def _create_mistral_payload():
+        def _nova():
+            content = [
+                {
+                "image": {
+                    "format": "png",
+                    "source": {"bytes": file}
+                    }
+                }
+                for file in self._process_files(files=files) if model_name not in ["nova-micro"]
+            ]
+            content.append({"text": user_prompt}) # type: ignore
+            payload = {
+                "system": [{"text": system_prompt}],
+                "messages": messages + [
+                    {
+                        "role": "user",
+                        "content": content
+                    },
+                    {
+                        "role": "assistant",
+                        "content": [{"text": assistant_prompt}]
+                    }
+                ],
+                "inferenceConfig": {
+                    "maxTokens": max_tokens,
+                    "temperature": temperature,
+                    "topP": top_p,
+                    "topK": top_k,
+                }
+            }
+            return payload
 
-            payload = {}
 
-            return payload 
-        
+        if "claude" in model_name:
+            return _anthropic()
+        elif "nova" in model_name:
+            return _nova()
+        else:
+            self.logger.warning(f"Could not initialize a payload for model '{model_name}'.")
+            return {}
 
-        if model_name.startswith("claude"):
-            return json.dumps(_create_claude_payload())
-        elif model_name.startswith("mistral"):
-            return json.dumps(_create_mistral_payload())
 
-
-    def _process_files(self, files: List[Union[str, BytesIO]] = []) -> List[str]:
+    def _process_files(self, files: list[Union[str, BytesIO]] = []) -> list[str]:
         """
         Processes a list of binary files, or file paths, or invalid files, and returns it as a pure list of valid binary files.
         """

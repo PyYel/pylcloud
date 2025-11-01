@@ -1,92 +1,152 @@
 
+import os, sys
 from abc import ABC, abstractmethod
 from uuid import uuid4
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize, sent_tokenize
 from collections import Counter
+from typing import Optional, Union, List, Dict, Any, TypedDict
+from io import BytesIO
 import nltk
 from nltk.data import find
+import logging
+from datetime import datetime
 
-from constants import INFERENCE_TYPE, AWS_REGION_NAME
+from constants import INFERENCE_TYPE, AWS_REGION_NAME, MAIN_DIR, LOGS_DIR
+
 
 class GPT(ABC):
     """
     Base class for generative AI inference.
     """
     def __init__(self,
-                 model_name: str = None,
-                 session_id: str = str(uuid4()),
-                 temperature: float = 0.1,
-                 max_tokens: int = 500):
+                 logs_name: str,
+                 logs_dir: Optional[str] = None):
         super().__init__()
-
-        self.model_name = model_name
-        self.session_id = session_id,
-        self.temperature = temperature,
-        self.max_tokens = max_tokens
-
-        if INFERENCE_TYPE == "server" or INFERENCE_TYPE == "built-in":
-            self.available_models = {
-                'llama-3.2-1B': {
-                    "model_id": "llama-3.2-1B",
-                    },
-                'llama-3.3-3B': {
-                    "model_id": "llama-3.2-3B",
-                    },
-                }
-        elif INFERENCE_TYPE == "azure":
-            self.available_models = {
-                'chat-gpt-4o': {
-                    "model_id": 'openai.gpt-4o'
-                    },
-                'chat-gpt-4': {
-                    "model_id": 'openai.gpt-4',
-                    },
-                'chat-got-3.5-turbo': {
-                    "model_id": 'openai.gpt-3.5-turbo',
-                    },
-                }
-        elif INFERENCE_TYPE == "aws":
-            self.available_models = {
-                'claude-3.5-sonnet': {
-                    "model_id": 'eu.anthropic.claude-3-7-sonnet-20250219-v1:0' if AWS_REGION_NAME.startswith("eu") else 'anthropic.claude-3-5-sonnet-20240620-v1:0',
-                    "anthropic_version": "bedrock-2023-05-31" 
-                    },
-                'claude-3.7-sonnet': {
-                    "model_id": 'eu.anthropic.claude-3-5-sonnet-20240620-v1:0' if AWS_REGION_NAME.startswith("eu") else 'anthropic.claude-3-5-sonnet-20240620-v1:0', 
-                    "anthropic_version": "bedrock-2023-05-31"
-                    },
-                'clade-3-sonnet': {
-                    "model_id": 'anthropic.claude-3-sonnet-20240229-v1:0', 
-                    "anthropic_version": "bedrock-2023-05-31"
-                    },
-                'claude-3-haiku': {
-                    "model_id": 'anthropic.claude-3-haiku-20240307-v1:0', 
-                    "anthropic_version": "bedrock-2023-05-31" # TODO: check old models versions and inference profiles
-                    }
-                }
-        else:
-            self.available_models = {}
-            print(f"GPT >> Invalid INFERENCE_TYPE environnement setting: '{INFERENCE_TYPE}'.")
 
         self._download_nltk_data()
 
+        self._config_logger(logs_name=logs_name, logs_dir=logs_dir)
+
+        self.available_models = {}
+        self.costs: dict[str, dict[str, float]] = {}
+
+        return None
+
+
+    def _config_logger(self, 
+                       logs_name: str, 
+                       logs_dir: Optional[str] = None, 
+                       logs_level: str = os.getenv("LOGS_LEVEL", "INFO"),
+                       logs_output: list[str] = ["console", "file"]):
+        """
+        Will configure logging accordingly to the plateform the program is running on.
+        """
+
+        if logs_dir is None:
+            logs_dir = os.path.join(os.getcwd(), "logs", str(datetime.now().strftime("%Y-%m-%d")))
+        else: 
+            logs_dir = os.path.join(logs_dir, str(datetime.now().strftime("%Y-%m-%d")))
+        os.makedirs(logs_dir, exist_ok=True)
+
+        self.logger = logging.getLogger(logs_name)
+        self.logger.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+        # If a logger already exists, this prevents duplication of the logger handlers
+        if self.logger.hasHandlers():
+            for handler in self.logger.handlers:
+                handler.close()
+
+        # Creates/recreates the handler(s)
+        if not self.logger.hasHandlers():
+
+            if "console" in logs_output:
+                console_handler = logging.StreamHandler()
+                console_handler.setLevel(logging._nameToLevel[logs_level])
+                console_handler.setFormatter(formatter)
+                self.logger.addHandler(console_handler)
+                self.logger.info("Logging handler configured for console output.")
+
+            if "file" in logs_output:
+                file_handler = logging.FileHandler(os.path.join(logs_dir, f"{datetime.now().strftime('%H-%M-%S')}-app.log"))
+                file_handler.setLevel(logging._nameToLevel[logs_level])
+                file_handler.setFormatter(formatter)
+                self.logger.addHandler(file_handler)
+                self.logger.info("Logging handler configured for file output.")
+
         return None
     
+    def compute_costs(self, model_name: str, usage: dict[str, int]) -> dict[str, float]:
+        """
+        Takes a ``usage`` dictionnary with token numbers and returns dollar costs inplace.
+
+        Parameters
+        ----------
+        model_name: str
+            The name of the model to compute the token costs for.
+        usage: dict[str, int]
+            A formatted usage dictionnary of token numbers
+
+        Returns
+        -------
+        usage: dict[str, float]
+            A formatted usage dictionnary of token costs (US$ without VAT).
+
+        Notes
+        -----
+        - Default prices are estimated in US dollars for Europe or Paris region, without VAT. 
+        To change these values, you may overwrite the cost attribute.
+
+        Examples
+        --------
+        >>> # Overwrite with custom values
+        >>> gpt_api.costs = {'claude-4-sonnet': {'input_tokens': 0.003*1e-3, 'output_tokens': 0.015*1e-3}}
+
+        >>> # Result for these values
+        >>> print(gpt_api.compute_costs(model_name='claude-4-sonnet, usage={'input_tokens': 534, 'output_tokens': 122})
+        >>> {'input_tokens': 0.0016, 'output_tokens': 0.0018}
+        """
+
+        costs = self.costs[model_name]
+
+        usage_compute = {
+            "input_tokens": usage["inputTokens"] * costs["input_tokens"],
+            "output_tokens": usage["outputTokens"] * costs["output_tokens"]
+        }
+
+        return usage_compute
+
+
 
     @abstractmethod
-    def return_query(self):
+    def return_query(self, 
+                     model_name: str, 
+                     user_prompt: str, 
+                     system_prompt: str = "", 
+                     assistant_prompt: str = "",
+                     messages: list[dict[str, Any]] = [],
+                     files: List[Union[str, BytesIO]] = [], 
+                     max_tokens: int = 512,
+                     temperature: float = 0.9,
+                     top_k: int = 32,
+                     top_p: float = 0.7):
         raise NotImplementedError
 
 
     @abstractmethod
-    def yield_query(self):
+    def yield_query(self, 
+                    model_name: str, 
+                    user_prompt: str, 
+                    system_prompt: str = "", 
+                    assistant_prompt: str = "",
+                    files: List[Union[str, BytesIO]] = [], 
+                    max_tokens: int = 512,
+                    temperature: float = 0.9,
+                    top_k: int = 32,
+                    top_p: float = 0.7):
         raise NotImplementedError
     
-    @abstractmethod
-    def _reset_session(self):
-        return None
-
 
     def generate_title(self, conversation: str):
         """
@@ -96,13 +156,13 @@ class GPT(ABC):
         words = word_tokenize(conversation.lower())
 
         # Remove stopwords and punctuation
-        stop_words = set(stopwords.words('english'))
+        stop_words = set(stopwords.words("english"))
         filtered_words = [word for word in words if word.isalnum() and word not in stop_words]
 
         # Get the most common words
         word_counts = Counter(filtered_words)
         common_words = [word for word, count in word_counts.most_common(4)]
-        title = ' '.join(common_words)
+        title = " ".join(common_words)
         
         return title.title()
 
@@ -112,18 +172,18 @@ class GPT(ABC):
         Downloads the nltk corpus ressources.
         """
         try:
-            find('tokenizers/punkt')
+            find("tokenizers/punkt")
         except LookupError:
-            nltk.download('punkt', quiet=True)
+            nltk.download("punkt", quiet=True)
 
         try:
-            find('corpora/stopwords')
+            find("corpora/stopwords")
         except LookupError:
-            nltk.download('stopwords', quiet=True)
+            nltk.download("stopwords", quiet=True)
 
-        try:
-            find('tokenizers/punkt_tab')
-        except LookupError:
-            nltk.download('punkt_tab', quiet=True)
+        # try:
+        #     find("tokenizers/punkt_tab")
+        # except LookupError:
+        #     nltk.download("punkt_tab", quiet=True)
 
         return None
