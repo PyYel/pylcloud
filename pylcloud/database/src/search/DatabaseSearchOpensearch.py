@@ -1,6 +1,6 @@
 import os, sys
-from typing import Union, Optional, Sequence, Any
-from opensearchpy import OpenSearch, helpers, NotFoundError, RequestsHttpConnection, RequestError
+from typing import Union, Optional, Sequence
+from opensearchpy import OpenSearch, helpers, NotFoundError, RequestsHttpConnection
 import json
 import urllib3
 import warnings
@@ -380,160 +380,107 @@ class DatabaseSearchOpensearch(DatabaseSearch):
         raise NotImplementedError
 
 
-
     def similarity_search(self, index_name: str, 
-                          query_vector: list[float] = None,
-                          query_text: str = None,
-                          must_pairs: list[dict[str, str]] = [], 
-                          should_pairs: list[dict[str, str]] = [],
-                          vector_field: str = "chunk_vector",
-                          text_field: str = "chunk_content",
-                          vector_weight: float = 0.7,
-                          text_weight: float = 0.3,
-                          initial_k: int = 20,
-                          final_k: int = 5
-                          ) -> list[dict[str, Any]]:
+                        query_vector: list[float], 
+                        must_pairs: list[dict[str, str]] = [], 
+                        should_pairs: list[dict[str, str]] = [],
+                        k: int = 5):
         """
-        Performs hybrid search in Opensearch combining vector similarity and text matching.
+        Performs k-NN similarity search in OpenSearch.
 
         Parameters
         ----------
         index_name : str
-            The Opensearch index to search in.
-        query_vector : list[float], optional
+            The OpenSearch index to search in.
+        query_vector : list
             The vector representation of the input query.
-        query_text : str, optional
-            The text query for keyword matching.
-        must_pairs : list[dict[str, str]], optional
-            List of field-value pairs that must match in the query.
-        should_pairs : list[dict[str, str]], optional
-            List of field-value pairs that should match in the query.
-        vector_field : str, optional
-            The field containing the vector embeddings (default is "chunk.vector").
-        text_field : str, optional
-            The field containing the text content (default is "chunk.content").
-        vector_weight : float, optional
-            Weight for the vector similarity component (default is 0.7).
-        text_weight : float, optional
-            Weight for the text matching component (default is 0.3).
-        initial_k : int, optional
-            The wideness of the search, before reranking logic (default is 20).
-        final_k: int, optional
+        must_pairs: list[dict[str]]
+            A list of ALL the label-value pairs that a record must match to be selected.
+        should_pairs: list[dict[str]]
+            A list of AT LEAST ONE label-value pair that a record must match to be selected.
+        k : int, optional
             The number of closest matches to return (default is 5).
 
         Returns
         -------
-        documents: list[dict[str, Any]]
-            A list of retrieved documents sorted by combined similarity.
+        list
+            A list of retrieved documents sorted by similarity.
         """
 
-        if query_vector is None and query_text is None:
-            error_msg = "Either query_vector or query_text must be provided"
-            self.logger.error(error_msg)
-            raise ValueError(error_msg)
-
-        if final_k > initial_k: 
-            final_k = initial_k
-            self.logger.warning("Hybrid search 'final_k' should be smaller than 'initial_k'.")
-
-        self.logger.debug(f"Starting hybrid search on index '{index_name}' with k={initial_k}")
-
-        # Build must conditions
         must_conditions = []
         for must_pair in must_pairs:
             must_conditions.append({"term": must_pair})
 
-        # Build should conditions
         should_conditions = []
         for should_pair in should_pairs:
             should_conditions.append({"term": should_pair})
 
-        # Create the query structure
+        # OpenSearch uses a different syntax for k-NN queries compared to Elasticsearch 8.x
         query = {
-            "size": initial_k,
+            "size": k,
             "query": {
-                "bool": {
-                    "must": must_conditions,
-                    "should": should_conditions,
-                    "minimum_should_match": 1 if should_conditions else 0,
+                "knn": {
+                    "chunk.vector": {
+                        "vector": query_vector,
+                        "k": k
+                    }
                 }
             }
         }
 
-        # Add vector search if query_vector is provided
-        if query_vector is not None:
-            if not isinstance(query_vector, list) or not all(isinstance(x, (int, float)) for x in query_vector):
-                self.logger.error("Similarity search 'query_vector' must be a list of numbers.")
-                return []
-
-            self.logger.debug(f"Adding vector search component with weight {vector_weight}")
-
-            # Add kNN query with weight
-            if "should" not in query["query"]["bool"]:
-                query["query"]["bool"]["should"] = []
-                
-            query["query"]["bool"]["should"].append({
-                "knn": {
-                    vector_field: {
-                        "vector": query_vector,
-                        "k": initial_k,
-                        "boost": vector_weight
-                    }
-                }
-            })
-
-        # Add text search if query_text is provided
-        if query_text is not None:
-            if not isinstance(query_text, str):
-                error_msg = "query_text must be a string"
-                self.logger.error(error_msg)
-                raise TypeError(error_msg)
-
-            self.logger.debug(f"Adding text search component with weight {text_weight}")
-
-            # Add text query with weight
-            if "should" not in query["query"]["bool"]:
-                query["query"]["bool"]["should"] = []
-
-            query["query"]["bool"]["should"].append({
-                "script_score": {
-                    "query": {
-                        "match": {
-                            text_field: {
-                                "query": query_text,
-                                "fuzziness": "AUTO"
+        # If we have boolean conditions, we need to use a script_score approach
+        if must_conditions or should_conditions:
+            query = {
+                "size": k,
+                "query": {
+                    "script_score": {
+                        "query": {
+                            "bool": {
+                                "must": must_conditions,
+                                "should": should_conditions,
+                                "minimum_should_match": 1 if should_conditions else 0
+                            }
+                        },
+                        "script": {
+                            "source": "knn_score",
+                            "lang": "knn",
+                            "params": {
+                                "field": "chunk.vector",
+                                "query_value": query_vector,
+                                "space_type": "cosinesimil"  # or "l2" depending on your vector space
                             }
                         }
-                    },
-                    "script": {
-                        "source": f"_score * params.weight",
-                        "params": {
-                            "weight": text_weight
-                        }
                     }
                 }
-            })
-
-        # Ensure we match something if both vector and text components are used
-        if query_vector is not None and query_text is not None:
-            query["query"]["bool"]["minimum_should_match"] = 1
+            }
 
         try:
-            self.logger.debug(f"Executing hybrid search query: {query}")
-            response = self.es.search(index=index_name, body=query)
+            response = self.api_os.search(index=index_name, body=query)
             documents = [hit for hit in response['hits']['hits']]
-            self.logger.info(f"Hybrid similarity search found {len(documents)} matching documents, returning top {final_k} scorers.")
-            return documents[:final_k]
-        
-        except ConnectionError as e:
-            self.logger.error(f"Connection error during search: {str(e)}")
-            return []
-        except RequestError as e:
-            self.logger.error(f"Invalid query error: {str(e)}")
-            return []
-        except NotFoundError as e:
-            self.logger.error(f"Index '{index_name}' not found: {str(e)}")
-            return []
+            self.logger.debug(f"Vector search found {len(documents)} matching documents.")
+            return documents
         except Exception as e:
-            self.logger.error(f"Unexpected error during hybrid similarity search: {str(e)}")
+            self.logger.error(f"Error: An error occurred: {e}")
             return []
+
+
+    def _commit(self):
+        """
+        Commits the transactions operated since the last commit.
+
+        Note: OpenSearch, like Elasticsearch, doesn't have explicit transaction commits.
+        Operations are automatically committed when performed.
+        """
+        self.logger.warning("OpenSearch doesn't support explicit transactions. Operations are committed automatically.")
+        raise NotImplementedError
+
+
+    def _rollback(self):
+        """
+        Rollbacks the transactions operated since the last commit.
+
+        Note: OpenSearch, like Elasticsearch, doesn't have explicit transaction rollbacks.
+        For data consistency, consider using snapshot/restore features instead.
+        """
+        self.logger.warning("OpenSearch doesn't support explicit transaction rollbacks. Consider using snapshot/restore for data recovery.")
+        raise NotImplementedError
