@@ -12,7 +12,7 @@ from typing import List, Union, Any
 import boto3
 # from typing import Generator
 from collections.abc import Generator
-
+import heapq
 
 from gpt import GPT
 from constants import AWS_ACCESS_KEY_SECRET, AWS_ACCESS_KEY_ID, AWS_REGION_NAME, LOGS_DIR
@@ -60,6 +60,12 @@ class GPTAWS(GPT):
                 },
             "nova-pro": {
                 "model_id": "eu.amazon.nova-pro-v1:0" if AWS_REGION_NAME.startswith("eu") else "amazon.nova-pro-v1:0",
+                },
+            "titan-text-embeddings": {
+                "model_id": "amazon.titan-embed-text-v2:0"
+                },
+            "titan-multimodal-embeddings": {
+                "model_id": "amazon.titan-embed-image-v1"
                 }
             }
 
@@ -83,43 +89,133 @@ class GPTAWS(GPT):
             "nova-pro": {
                 "input_tokens": 0.00118*1e-3,
                 "output_tokens": 0.00472*1e-3
+                },
+            "titan-text-embeddings": {
+                "input_tokens": 0.00003*1e-3,
+                "output_tokens": 0
+                },
+            "titan-multimodal-embeddings": {
+                "input_tokens": 0.001*1e-3,
+                "output_tokens": 0
                 }
             }
 
         return None
 
 
-    def return_query(self, 
-                     model_name: str, 
-                     user_prompt: str, 
-                     system_prompt: str = "", 
-                     assistant_prompt: str = "",
-                     messages: list[dict[str, Any]] = [],
-                     files: List[Union[str, BytesIO]] = [], 
-                     max_tokens: int = 512,
-                     temperature: float = 0.9,
-                     top_k: int = 32,
-                     top_p: float = 0.7) -> Union[dict, dict[str, Union[str, int]]]:
+    def return_embedding(self, 
+                        model_name: str, 
+                        prompt: str, 
+                        files: List[Union[str, BytesIO]] = [], 
+                        dimensions: int = 512) -> dict[str, Union[list[float], dict[str, int]]]:
         """
         Function to interact with an AWS Bedrock model using boto3.
 
         Parameters
         ----------
         model_name: str
-            The human readable name of the model in AWS Bedrock to invoke. 
-            See ``list_models()`` for the exact ID name. See the note below for the models names.
+            The human readable name of the model in AWS Bedrock to invoke. See Notes below.
+        prompt: str 
+            The input text to send to the model.
+        files: list[str|BytesIO], []
+            The list of files to add to the payload. Can be local paths, binary files, or both. Supports only images.
+            TODO: add other file types.
+        dimensions: int
+            Can be used to specify vector output length when calling embedding models.
+
+        Returns
+        -------
+        response_body: dict
+            Response from the AWS Bedrock model.
+
+        Notes
+        -----
+        - Selected ``model_name`` must be one of:
+            - 'titan-text-embeddings'
+            - 'titan-multimodal-embeddings'
+        - When calling an embedding model, use the ``dimensions`` parameters to specify output length. Value must be one of:
+            - 'titan-text-embeddings': 1024, 512, 256
+            - 'titan-multimodal-embeddings': 1024, 384, 256
+
+        Examples
+        --------
+        >>> print(return_generation(model_name='nova-lite', user_prompt='who are you?'))
+        >>> {'embedding': [-0.12171094864606857, ..., -0.03663225471973419], 'usage': {'input_tokens': 5}
+        """
+
+        try:
+            
+            model_id = self.available_models[model_name]["model_id"]
+
+            payload = {
+                "inputText": prompt,
+                "dimensions": dimensions if dimensions in [1024, 512, 384, 256] else 1024,
+                "normalize": True
+            }
+            
+            response = self.bedrock_runtime_client.invoke_model(
+                modelId=model_id,
+                accept='application/json',  
+                contentType='application/json',  
+                body=json.dumps(payload)
+            )
+            
+            response_body = json.loads(response['body'].read())
+            if "titan" in model_name:
+                embedding = response_body["embedding"]
+                usage = {"input_tokens": response_body["inputTextTokenCount"]}
+            else:
+                self.logger.warning(f"Invalid model name '{model_name}'.")
+                return {}
+
+            return {"embedding": embedding, "usage": usage}
+        
+        except Exception as e:
+            self.logger.error(e)
+            return {}
+        
+
+    def return_generation(self, 
+                        model_name: str, 
+                        user_prompt: str, 
+                        system_prompt: str = "", 
+                        assistant_prompt: str = "",
+                        messages: list[dict[str, Any]] = [],
+                        files: List[Union[str, BytesIO]] = [], 
+                        max_tokens: int = 512,
+                        temperature: float = 0.9,
+                        top_k: int = 32,
+                        top_p: float = 0.7) -> Union[dict, dict[str, Union[str, int]]]:
+        """
+        Function to interact with an AWS Bedrock model using boto3.
+
+        Parameters
+        ----------
+        model_name: str
+            The human readable name of the model in AWS Bedrock to invoke. See Notes below.
         user_prompt: str 
             The user's input text to send to the model.
         system_prompt: str 
             The system text to send to the model.
         assistant_prompt: str 
             Text sent as a previous assistant response. Usefull for providing context.
+        messages: list[dict[str, str]]
+            The conversation history to pass alongside the prompts queries.
         files: list[str|BytesIO], []
             The list of files to add to the payload. Can be local paths, binary files, or both. Supports only images.
             TODO: add other file types.
-        display: bool, False
-            Whereas to print in the terminal the model response, or not.
- 
+        max_tokens: int
+            The maximum token length of the response. Will stop and truncate the generation when reached. 
+        temperature: float
+            The generation output randomness. Higher temperature result in more various answers. Must be between 0 and 1.
+        top_k: int
+            The number of token to suggest as possible output. 
+            The model will then select one answer among the ``top_k`` possibilities.
+        top_p: float
+            The sum of confidence score to reach when adding the value of all suggested output scores.
+            Low ``top_p`` will be reached quickly when adding the most likely outputs. Large ``top_p`` will lengthen 
+            the possible outputs with less likely tokens, resulting in more random generation.
+
         Returns
         -------
         response_body: dict
@@ -133,10 +229,11 @@ class GPTAWS(GPT):
             - 'nova-micro'
             - 'nova-lite'
             - 'nova-pro'
+        - When calling an embedding model, see ``return_embedding()`` instead.
 
         Examples
         --------
-        >>> print(return_query(model_name='nova-lite', user_prompt='who are you?'))
+        >>> print(return_generation(model_name='nova-lite', user_prompt='who are you?'))
         >>> {'text': 'I am AWS Nova', 'usage': {'input_tokens': 5, 'output_tokens': 8}}
         """
 
@@ -180,35 +277,45 @@ class GPTAWS(GPT):
             return {}
 
 
-    def yield_query(self, 
-                    model_name: str, 
-                    user_prompt: str, 
-                    system_prompt: str = "", 
-                    assistant_prompt: str = "",
-                    files: List[Union[str, BytesIO]] = [], 
-                    max_tokens: int = 512,
-                    temperature: float = 0.9,
-                    top_k: int = 32,
-                    top_p: float = 0.7) -> Union[dict, Generator[dict[str, Union[str, int]]]]:
+    def yield_generation(self, 
+                        model_name: str, 
+                        user_prompt: str, 
+                        system_prompt: str = "", 
+                        assistant_prompt: str = "",
+                        files: List[Union[str, BytesIO]] = [], 
+                        max_tokens: int = 512,
+                        temperature: float = 0.9,
+                        top_k: int = 32,
+                        top_p: float = 0.7) -> Union[dict, Generator[dict[str, Union[str, int]]]]:
         """
         Function to interact with an AWS Bedrock model using boto3.
 
         Parameters
         ----------
         model_name: str
-            The human readable name of the model in AWS Bedrock to invoke. 
-            See ``list_models()`` for the exact ID name. See the note below for the models names.
+            The human readable name of the model in AWS Bedrock to invoke. See Notes below.
         user_prompt: str 
             The user's input text to send to the model.
         system_prompt: str 
             The system text to send to the model.
         assistant_prompt: str 
             Text sent as a previous assistant response. Usefull for providing context.
+        messages: list[dict[str, str]]
+            The conversation history to pass alongside the prompts queries.
         files: list[str|BytesIO], []
             The list of files to add to the payload. Can be local paths, binary files, or both. Supports only images.
             TODO: add other file types.
-        display: bool, False
-            Whereas to print in the terminal the model response, or not.
+        max_tokens: int
+            The maximum token length of the response. Will stop and truncate the generation when reached. 
+        temperature: float
+            The generation output randomness. Higher temperature result in more various answers. Must be between 0 and 1.
+        top_k: int
+            The number of token to suggest as possible output. 
+            The model will then select one answer among the ``top_k`` possibilities.
+        top_p: float
+            The sum of confidence score to reach when adding the value of all suggested output scores.
+            Low ``top_p`` will be reached quickly when adding the most likely outputs. Large ``top_p`` will lengthen 
+            the possible outputs with less likely tokens, resulting in more random generation.
  
         Yields
         -------
@@ -225,10 +332,11 @@ class GPTAWS(GPT):
             - 'nova-micro'
             - 'nova-lite'
             - 'nova-pro'
+        - When calling an embedding model, see ``return_embedding()`` instead.
 
         Examples
         --------
-        >>> for token in yield_query(model_name='nova-micro', user_prompt='Who are you?'): print(token)
+        >>> for token in yield_generation(model_name='nova-micro', user_prompt='Who are you?'): print(token)
         >>>     'I am'
         >>>     'AWS'
         >>>     'Nova'
@@ -255,20 +363,52 @@ class GPTAWS(GPT):
                 contentType='application/json',  
                 body=json.dumps(payload)
             )
-            
+
             text = ""
+            buffer = []
+            expected_seq = 0
             for event in response["body"]:
                 chunk = json.loads(event["chunk"]["bytes"])
-                if chunk["type"] == "content_block_delta":
-                    text += chunk["delta"].get("text", "")
-                    yield chunk["delta"].get("text", "")
-                elif chunk["type"] == "message_stop":
-                    usage = {
-                        "input_tokens": chunk["amazon-bedrock-invocationMetrics"].get("inputTokenCount", ""),
-                        "output_tokens": chunk["amazon-bedrock-invocationMetrics"].get("outputTokenCount", ""),
-                    }
-                    yield {"text": text, "usage": usage}
-            
+
+                # Anthropic
+                if "type" in chunk:
+                    if chunk["type"] == "content_block_delta":
+                        seq = chunk.get("delta", {}).get("index", expected_seq)
+                        heapq.heappush(buffer, (seq, chunk["delta"].get("text", "")))
+
+                        # flush in-order chunks
+                        while buffer and buffer[0][0] == expected_seq:
+                            _, t = heapq.heappop(buffer)
+                            text += t
+                            yield t
+                            expected_seq += 1
+
+                    elif chunk["type"] == "message_stop":
+                        usage = {
+                            "input_tokens": chunk.get("amazon-bedrock-invocationMetrics", {}).get("inputTokenCount", 0),
+                            "output_tokens": chunk.get("amazon-bedrock-invocationMetrics", {}).get("outputTokenCount", 0),
+                        }
+                        yield {"text": text, "usage": usage}
+
+                # Nova
+                else:
+                    if "contentBlockDelta" in chunk:
+                        seq = chunk["contentBlockDelta"].get("index", expected_seq)
+                        heapq.heappush(buffer, (seq, chunk["contentBlockDelta"]["delta"].get("text", "")))
+
+                        while buffer and buffer[0][0] == expected_seq:
+                            _, t = heapq.heappop(buffer)
+                            text += t
+                            yield t
+                            expected_seq += 1
+
+                    elif "metadata" in chunk:
+                        usage = {
+                            "input_tokens": chunk["metadata"]["usage"].get("inputTokenCount", 0),
+                            "output_tokens": chunk["metadata"]["usage"].get("outputTokenCount", 0),
+                        }
+                        yield {"text": text, "usage": usage}
+                        
         except Exception as e:
             self.logger.error(e)
             return {}
@@ -381,7 +521,7 @@ class GPTAWS(GPT):
                 }
             }
             return payload
-
+        
 
         if "claude" in model_name:
             return _anthropic()

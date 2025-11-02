@@ -118,9 +118,17 @@ class GPT(ABC):
         return usage_compute
 
 
+    @abstractmethod
+    def return_embedding(self, 
+                        model_name: str, 
+                        prompt: str, 
+                        files: List[Union[str, BytesIO]] = [], 
+                        dimensions: int = 512) -> Union[dict, dict[str, Union[str, int]]]:
+        raise NotImplementedError
+
 
     @abstractmethod
-    def return_query(self, 
+    def return_generation(self, 
                      model_name: str, 
                      user_prompt: str, 
                      system_prompt: str = "", 
@@ -135,7 +143,7 @@ class GPT(ABC):
 
 
     @abstractmethod
-    def yield_query(self, 
+    def yield_generation(self, 
                     model_name: str, 
                     user_prompt: str, 
                     system_prompt: str = "", 
