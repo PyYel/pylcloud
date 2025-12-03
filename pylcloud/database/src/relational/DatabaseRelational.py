@@ -7,29 +7,30 @@ from abc import ABC, abstractmethod
 
 from database import Database
 
+
 class DatabaseRelational(Database):
     """
-    Databases API helper.
+    Abstract class for relational-like databases.
     """
-    def __init__(self, logs_name: str):
+
+    def __init__(self):
         """
-        Initializes the helper and its logging.
         """
-        super().__init__(logs_name=logs_name)
+        super().__init__()
 
         return None
 
     @abstractmethod
-    def _get_connection(self):
+    def _commit(self):
         """
-        Provides an active connection for the upcoming query, ensures alive connections.
+        Commits the transactions operated since the last commit.
         """
         raise NotImplementedError
-    
+
     @abstractmethod
-    def _clear_connection(self):
+    def _rollback(self):
         """
-        Closes all connection and clears the connection pool, acting as a disconnect from the DB.
+        roolbacks the transactions operated since the last commit.
         """
         raise NotImplementedError
 
@@ -40,18 +41,16 @@ class DatabaseRelational(Database):
         """
         raise NotImplementedError
 
-
     @abstractmethod
     def drop_table(self, *args, **kwargs):
         """
         Drops the matching indexes/collections on this cluster (database).
         """
         raise NotImplementedError
-    
 
     @abstractmethod
-    def execute_file(self, *args, **kwargs):
+    def list_tables(self, *args, **kwargs):
         """
-        Runs a SQL file.
+        Lists all the indexes/collections on this cluster (database).
         """
         raise NotImplementedError

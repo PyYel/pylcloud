@@ -10,15 +10,19 @@ from abc import ABC, abstractmethod
 
 class Database(ABC):
     """
-    Databases API helper.
+    Pseudo-abstract class for databases.
     """
-    def __init__(self, logs_name: str):
+    
+    def __init__(self, *args, **kwargs):
         """
-        Initializes the helper and its logging.
         """
         super().__init__()
 
-        self._config_logger(logs_name=logs_name)
+        # Default logger fallback
+        self._config_logger(
+            logs_name="Database", 
+            logs_output=["console"],
+            )
 
         return None
 
@@ -64,16 +68,28 @@ class Database(ABC):
     
 
     def _config_logger(self, 
-                       logs_name: str, 
-                       logs_dir: Optional[str] = None, 
+                       logs_name: str = "Database", 
+                       logs_dir: Optional[str] = os.getenv("LOGS_DIR", None), 
                        logs_level: str = os.getenv("LOGS_LEVEL", "INFO"),
                        logs_output: list[str] = ["console", "file"]):
         """
-        Will configure logging accordingly to the plateform the program is running on. This
-        is the default behaviour. See ``custom_config()`` to override the parameters.
+        Configures a standardized logger for ``Database`` modules. Environement configuration is recommended.
+
+        Parameters
+        ----------
+        logs_name: str
+            The name of the logger
+        logs_dir: Optional[str]
+            The output root folder when 'file' in ``logs_output``. Subfolders will be created from there.
+        logs_level: str
+            The level of details to track. Should be configured using the ``LOGS_LEVEL`` environment variable.
+            ``LOGS_LEVEL <= WARNING`` is recommended. 
+        logs_output: List[str]
+            The output method, whereas printing to console, file, or both.
         """
 
-        if logs_level not in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:  logs_level="INFO"
+        if logs_level not in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:
+            logs_level="INFO"
         if logs_dir is None: logs_dir = os.path.join(os.getcwd(), "logs", str(datetime.now().strftime("%Y-%m-%d")))
         os.makedirs(logs_dir, exist_ok=True)
 

@@ -75,7 +75,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         - Database management is a rather uncommon operation. For a more streamlined usage of this helper, once connected, \
         management is limited to schema level.
         """
-        super().__init__(logs_name="DatabaseRelationalPostgreSQL")
+        super().__init__()
 
         self.host = host
         self.database = database

@@ -3,23 +3,30 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pyyel-cloudops"
-version = "0.0.2"
+name = "PyYel-CloudOps"
+version = "0.1.0"
 description = "Deployment tools"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.6"
 authors = [
-    { name="Nayel BLIDI", email="nayel.blidi@gmail.com" }
+    { name="Maxime BLIDI", email="blidi.maxime@gmail.com" }
 ]
 dependencies = [
     "boto3",
     "mysql-connector-python",
     "tqdm",
     "elasticsearch",
+    "fastapi",
+    "uvicorn",
+    "psycopg2",
+    "opensearch-py" ,
+    "requests-aws4auth",
+
+    # For testing
+    "python-dotenv==1.0.1",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
 
