@@ -1,5 +1,3 @@
-
-
 from .src.AWS import AWS
 
 from .src.AWSBedrockKnowledgeBase import AWSBedrockKnowledgeBase

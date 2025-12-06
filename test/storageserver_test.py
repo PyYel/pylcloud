@@ -14,7 +14,7 @@ if "server" in sys.argv:
     storage_api.start()
 
 else:
-        
+
     test_file_path = os.path.join(os.path.dirname(__file__), "test_file.txt")
     with open(test_file_path, "w") as f:
         f.write("Hello Storage Server!")
@@ -24,7 +24,7 @@ else:
     download_url = "http://localhost:5001/download"
     list_url = "http://localhost:5001/list_buckets"
     list_files_url = "http://localhost:5001/list_bucket_files"
-    
+
     # Upload to server
     with open(test_file_path, "rb") as f:
         response = requests.post(upload_url, files={"file": f}, params={"key": key})
@@ -46,5 +46,3 @@ else:
         print("Downloaded file saved as 'downloaded_test.txt'")
     else:
         print("Download failed:", response.json())
-
-

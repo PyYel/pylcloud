@@ -15,7 +15,10 @@ api_os = DatabaseSearchOpensearch(host="http://localhost:9200")
 
 # api_os.drop_index(index_name="test")
 
-api_os.create_index(index_name="test", properties={"name": {"type": "keyword"}, "age": {"type": "float"}})
+api_os.create_index(
+    index_name="test",
+    properties={"name": {"type": "keyword"}, "age": {"type": "float"}},
+)
 
 indexes = api_os.list_indexes()
 
@@ -25,4 +28,11 @@ if indexes:
     print([response["_source"] for response in api_os.query_data(index_name="test")])
 
     api_os.delete_data(index_name="test", pairs={"name": "john2"})
-    print([response["_source"] for response in api_os.query_data(index_name="test", must_pairs=[{"name": "john2"}])])
+    print(
+        [
+            response["_source"]
+            for response in api_os.query_data(
+                index_name="test", must_pairs=[{"name": "john2"}]
+            )
+        ]
+    )

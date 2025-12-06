@@ -30,26 +30,26 @@ class Database(ABC):
     def connect_database(self, *args, **kwargs):
         """ """
         raise NotImplementedError
-    
+
     @abstractmethod
     def delete_data(self, *args, **kwargs):
         """
         Deletes matching entries/records/documents from the DB.
         """
         raise NotImplementedError
-    
+
     @abstractmethod
     def describe_database(self, *args, **kwargs):
         """
         High level database description.
         """
         raise NotImplementedError
-    
+
     @abstractmethod
     def disconnect_database(self, *args, **kwargs):
         """ """
         raise NotImplementedError
-    
+
     @abstractmethod
     def query_data(self, *args, **kwargs):
         """

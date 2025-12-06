@@ -3,10 +3,9 @@ import hashlib
 import logging
 from typing import Optional
 from datetime import datetime
-
 from abc import ABC, abstractmethod
 
-from database import Database
+from ..Database import Database
 
 
 class DatabaseSearch(Database):

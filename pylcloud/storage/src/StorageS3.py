@@ -12,12 +12,15 @@ class StorageS3(Storage):
     """
     Standard S3 class with all purpose methods.
     """
-    def __init__(self, 
-                 bucket_name: str,
-                 aws_access_key_id: str,
-                 aws_secret_access_key: str, 
-                 aws_region_name: str = 'eu-west-1',
-                 tmp_dir: Optional[str] = None) -> None:
+
+    def __init__(
+        self,
+        bucket_name: str,
+        aws_access_key_id: str,
+        aws_secret_access_key: str,
+        aws_region_name: str = "eu-west-1",
+        tmp_dir: Optional[str] = None,
+    ) -> None:
         """
         Initiates a connection to a given S3 bucket.
 
@@ -50,10 +53,12 @@ class StorageS3(Storage):
         """
         super().__init__(bucket_name=bucket_name, tmp_dir=tmp_dir)
 
-        self.s3_client = boto3.client(service_name="s3", 
-                                      aws_access_key_id=aws_access_key_id, 
-                                      aws_secret_access_key=aws_secret_access_key, 
-                                      region_name=aws_region_name)
+        self.s3_client = boto3.client(
+            service_name="s3",
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key,
+            region_name=aws_region_name,
+        )
 
         # StorageS3 neeeds a working folder to download/upload files from a unique entry point
         if not os.path.exists(self.tmp_dir):
@@ -62,17 +67,15 @@ class StorageS3(Storage):
 
         return None
 
-
     def create_bucket(self):
         """
         Creates the chosen bucket if it does not exist.
         """
         raise NotImplementedError
 
-
     def ensure_files(self, keys: Union[str, list[str]]):
         """
-        Checks if the cloud keys exist and returns a dictionnary of the results, 
+        Checks if the cloud keys exist and returns a dictionnary of the results,
         where keys are the cloud keys, and the values are booleans.
 
         Parameters
@@ -87,20 +90,22 @@ class StorageS3(Storage):
         """
 
         def _ensure_key(key: str):
-            response = self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=key)
-            if 'Contents' in response:
+            response = self.s3_client.list_objects_v2(
+                Bucket=self.bucket_name, Prefix=key
+            )
+            if "Contents" in response:
                 return key, True
-            else: 
+            else:
                 return key, False
-            
+
         if isinstance(keys, str):
             return _ensure_key(key=keys)
-        
+
         print(f"StorageS3 >> Verifying the existence of {len(keys)} keys on the cloud.")
         results = {}
         failures = 0
         with tqdm(total=len(keys)) as pbar:
-            with ThreadPoolExecutor(max_workers=2*os.cpu_count()) as executor: # type: ignore
+            with ThreadPoolExecutor(max_workers=2 * os.cpu_count()) as executor:  # type: ignore
                 futures = []
                 for key in keys:
                     futures.append(executor.submit(_ensure_key, key=key))
@@ -113,18 +118,24 @@ class StorageS3(Storage):
                     pbar.update(1)
 
         if failures:
-            print(f"StorageS3 >> Failed to verify the existence of {failures}/{len(keys)} keys.")
+            print(
+                f"StorageS3 >> Failed to verify the existence of {failures}/{len(keys)} keys."
+            )
 
         return results
 
-
-    def download_files(self, keys: Union[str, list[str]], paths: Optional[Union[str, list[str]]] = None, display: bool = False):
+    def download_files(
+        self,
+        keys: Union[str, list[str]],
+        paths: Optional[Union[str, list[str]]] = None,
+        display: bool = False,
+    ):
         """
         Downloads a list of files into the path folder.
 
         Parameters
         ----------
-        keys: str | list[str] 
+        keys: str | list[str]
             The list of cloud paths of each file
         path: str | list[str], None
             The local path to save the dowload the data to. If None is specified, the data is
@@ -132,16 +143,19 @@ class StorageS3(Storage):
         """
 
         def _download_file(key: str, path: str):
-            self.s3_client.download_file(Bucket=self.bucket_name, 
-                                        Key=key, 
-                                        Filename=path)
+            self.s3_client.download_file(
+                Bucket=self.bucket_name, Key=key, Filename=path
+            )
             return None
 
         keys, paths = self._check_args(keys=keys, paths=paths)
 
         if not paths:
             path = self.tmp_dir
-            paths = [os.path.join(path, f"{idx}{os.path.splitext(key)[-1]}") for idx, key in enumerate(keys)]
+            paths = [
+                os.path.join(path, f"{idx}{os.path.splitext(key)[-1]}")
+                for idx, key in enumerate(keys)
+            ]
         else:
             if not all([os.path.exists(os.path.dirname(path)) for path in paths]):
                 print("StorageS3 >> Download path do not exist. Download aborted.")
@@ -150,10 +164,10 @@ class StorageS3(Storage):
         failed_files = []
         print(f"StorageS3 >> Downloading {len(keys)} files.")
         with tqdm(total=len(keys), disable=display) as pbar:
-            with ThreadPoolExecutor(max_workers=2*os.cpu_count()) as executor: # type: ignore
+            with ThreadPoolExecutor(max_workers=2 * os.cpu_count()) as executor:  # type: ignore
                 futures = []
                 for key, path in zip(keys, paths):
-                    futures.append(executor.submit(_download_file, key=key, path=path)) 
+                    futures.append(executor.submit(_download_file, key=key, path=path))
                 for future in as_completed(futures):
                     try:
                         future.result()
@@ -161,11 +175,12 @@ class StorageS3(Storage):
                         failed_files.append(future)
                     pbar.update(1)
         if failed_files:
-            print("StorageS3 >> An error was raised (only one is shown if many): \n", e) # type: ignore
-            print(f"StorageS3 >> Error downloading {len(failed_files)}/{len(keys)} files. See error above.")
+            print("StorageS3 >> An error was raised (only one is shown if many): \n", e)  # type: ignore
+            print(
+                f"StorageS3 >> Error downloading {len(failed_files)}/{len(keys)} files. See error above."
+            )
 
         return failed_files
-
 
     def download_directory(self, key: str, path: Optional[str] = None):
         """
@@ -195,30 +210,41 @@ class StorageS3(Storage):
         if not path:
             path = self.tmp_dir
         else:
-            if not os.path.exists(path): os.mkdir(path)
-        
-        paginator = self.s3_client.get_paginator('list_objects_v2')
+            if not os.path.exists(path):
+                os.mkdir(path)
+
+        paginator = self.s3_client.get_paginator("list_objects_v2")
         page_total = 0
         for result in paginator.paginate(Bucket=self.bucket_name, Prefix=key):
             page_total += 1
 
         file_idx = 0
         failed_files = []
-        print(f"StorageS3 >> Downloading batch of content from '{key}'")#: {page}/{page_total}")
+        print(
+            f"StorageS3 >> Downloading batch of content from '{key}'"
+        )  #: {page}/{page_total}")
         with tqdm(total=page_total) as pbar:
             for result in paginator.paginate(Bucket=self.bucket_name, Prefix=key):
-                if result.get('Contents') is not None:
-                    with ThreadPoolExecutor(max_workers=2*os.cpu_count()) as executor: # type: ignore
+                if result.get("Contents") is not None:
+                    with ThreadPoolExecutor(max_workers=2 * os.cpu_count()) as executor:  # type: ignore
                         futures = []
-                        for obj in result['Contents']:
-                            key = obj['Key']
-                            dirpath = os.path.join(os.path.join(path), f"{os.path.basename(os.path.dirname(key))}")
-                            if not os.path.exists(dirpath): os.mkdir(dirpath)
+                        for obj in result["Contents"]:
+                            key = obj["Key"]
+                            dirpath = os.path.join(
+                                os.path.join(path),
+                                f"{os.path.basename(os.path.dirname(key))}",
+                            )
+                            if not os.path.exists(dirpath):
+                                os.mkdir(dirpath)
                             filename = os.path.basename(key)
-                            futures.append(executor.submit(self.s3_client.download_file, 
-                                                           Bucket=self.bucket_name, 
-                                                           Key=key,
-                                                           Filename=os.path.join(dirpath, filename)))
+                            futures.append(
+                                executor.submit(
+                                    self.s3_client.download_file,
+                                    Bucket=self.bucket_name,
+                                    Key=key,
+                                    Filename=os.path.join(dirpath, filename),
+                                )
+                            )
                             file_idx += 1
 
                 for future in as_completed(futures):
@@ -229,11 +255,12 @@ class StorageS3(Storage):
                     pbar.update(1)
 
         if failed_files:
-            print("StorageS3 >> An error was raised (only one is shown if many): \n", e) # type: ignore
-            print(f"StorageS3 >> Error downloading {len(failed_files)} files. See error above.")
+            print("StorageS3 >> An error was raised (only one is shown if many): \n", e)  # type: ignore
+            print(
+                f"StorageS3 >> Error downloading {len(failed_files)} files. See error above."
+            )
 
         return failed_files
-
 
     def list_files(self, prefix: str = ""):
         """
@@ -251,27 +278,28 @@ class StorageS3(Storage):
         """
 
         if not self.ensure_keys(keys=prefix):
-            raise ValueError(f"StorageS3 >> File listing prefix '{prefix}' does not exist")
+            raise ValueError(
+                f"StorageS3 >> File listing prefix '{prefix}' does not exist"
+            )
 
-        paginator = self.s3_client.get_paginator('list_objects_v2')
+        paginator = self.s3_client.get_paginator("list_objects_v2")
         file_list = []
         print(f"StorageS3 >> Listing files in {self.bucket_name}/{prefix}")
         for result in paginator.paginate(Bucket=self.bucket_name, Prefix=prefix):
-            if result.get('Contents') is not None:
-                for obj in result['Contents']:
-                    file_list.append(obj['Key'])
+            if result.get("Contents") is not None:
+                for obj in result["Contents"]:
+                    file_list.append(obj["Key"])
 
         return file_list
 
-
     def delete_files(self, keys: Union[str, list[str]]):
         """
-        Deletes from the bucket the files specified in keys, 
+        Deletes from the bucket the files specified in keys,
         and returns the list of the successfully deleted files
 
         Parameters
         ----------
-        keys: list[str] 
+        keys: list[str]
             The list of keys (cloud path) to delete.
         """
 
@@ -286,33 +314,38 @@ class StorageS3(Storage):
         if keys != []:
             batched_keys = []
             for batch_start in range(0, len(keys), 1000):
-                batched_keys.append(keys[batch_start:batch_start+1000])
+                batched_keys.append(keys[batch_start : batch_start + 1000])
 
             deleted_counter = 0
             print(f"StorageS3 >> Deleting {len(keys)} keys.")
             for batch in tqdm(batched_keys):
-                response = self.s3_client.delete_objects(Bucket=self.bucket_name, 
-                                                    Delete={'Objects': [{'Key': key} for key in batch]})
-                deleted_counter += len(response.get('Deleted', []))
+                response = self.s3_client.delete_objects(
+                    Bucket=self.bucket_name,
+                    Delete={"Objects": [{"Key": key} for key in batch]},
+                )
+                deleted_counter += len(response.get("Deleted", []))
 
             if deleted_counter == len(keys):
-                print(f"StorageS3 >> All {deleted_counter} keys were successfully deleted.")
+                print(
+                    f"StorageS3 >> All {deleted_counter} keys were successfully deleted."
+                )
             else:
-                print(f"StorageS3 >> Only {deleted_counter} out of {len(keys)} keys were successfully deleted.")
+                print(
+                    f"StorageS3 >> Only {deleted_counter} out of {len(keys)} keys were successfully deleted."
+                )
 
             return None
-        
+
         else:
             print(f"StorageS3 >> No keys were deleted as the input was empty.")
 
-        return None        
-
+        return None
 
     def edit_file(self, original_key: str, new_key: str, replace: bool = True):
         """
         Moves, renames, or copy-pastes a key, by editing its cloud path.
 
-        TODO: parallelize 
+        TODO: parallelize
 
         Parameters
         ----------
@@ -322,34 +355,38 @@ class StorageS3(Storage):
             The new key name or path.
         replace: str, True
             If ``False`` the ``original_key`` is kept, hence resulting in a copy-paste action.
-            Otherwise, is similar to either a cut-paste or rename acion. 
+            Otherwise, is similar to either a cut-paste or rename acion.
 
         Notes
         -----
         - Either way, the key is copied to a ``new_key`` cloud path. If ``replace`` is set to ``True``, the old
         version of the key is deleted after.
         """
-        
-        if not(self.ensure_keys(keys=original_key)):
+
+        if not (self.ensure_keys(keys=original_key)):
             print(f"StorageS3 >> Original key {original_key} does not exist.")
-            
+
         elif self.ensure_keys(keys=new_key):
             print(f"StorageS3 >> New key {new_key} already exist.")
-            
+
         else:
-            self.s3_client.copy(CopySource={'Bucket' : self.bucket_name,'Key': original_key}, 
-                                Bucket=self.bucket_name, 
-                                Key=new_key)
-            if replace: self.s3_client.delete_object(Bucket=self.bucket_name, Key=original_key)
+            self.s3_client.copy(
+                CopySource={"Bucket": self.bucket_name, "Key": original_key},
+                Bucket=self.bucket_name,
+                Key=new_key,
+            )
+            if replace:
+                self.s3_client.delete_object(Bucket=self.bucket_name, Key=original_key)
 
         return None
 
-
-    def upload_files(self, 
-                     keys: Union[str, list[str]], 
-                     paths: Union[str, list[str]], 
-                     content_types: Optional[list] = None, 
-                     display: bool = True) -> None:
+    def upload_files(
+        self,
+        keys: Union[str, list[str]],
+        paths: Union[str, list[str]],
+        content_types: Optional[list] = None,
+        display: bool = True,
+    ) -> None:
         """
         Uploads multiple files to S3 with specified content types using parallel processing.
 
@@ -367,15 +404,17 @@ class StorageS3(Storage):
             Uploads a local file (path) into its cloud location (key).
             """
             if not os.path.exists(path):
-                print(f"StorageS3 >> Local file '{path}' does not exist. Check the path argument.")
+                print(
+                    f"StorageS3 >> Local file '{path}' does not exist. Check the path argument."
+                )
                 return False
 
             try:
                 self.s3_client.upload_file(
-                    Bucket=self.bucket_name, 
+                    Bucket=self.bucket_name,
                     Key=key,
                     Filename=path,
-                    ExtraArgs={'ContentType': content_type}
+                    ExtraArgs={"ContentType": content_type},
                 )
                 return True
             except Exception as e:
@@ -383,23 +422,26 @@ class StorageS3(Storage):
                 return False
 
         if content_types is None:
-            content_types = ['application/octet-stream'] * len(paths)
+            content_types = ["application/octet-stream"] * len(paths)
 
         if len(keys) != len(paths) or len(keys) != len(content_types):
-            raise ValueError(f"StorageS3 >> The lists of keys, paths, and content_types must have the same length.")
+            raise ValueError(
+                f"StorageS3 >> The lists of keys, paths, and content_types must have the same length."
+            )
 
         upload_tasks = list(zip(keys, paths, content_types))
-        with ThreadPoolExecutor(max_workers=os.cpu_count()*2) as executor:
+        with ThreadPoolExecutor(max_workers=os.cpu_count() * 2) as executor:
 
-            future_to_idx = {executor.submit(_upload_file, key, path, content_type): i 
-                            for i, (key, path, content_type) in enumerate(upload_tasks)}
+            future_to_idx = {
+                executor.submit(_upload_file, key, path, content_type): i
+                for i, (key, path, content_type) in enumerate(upload_tasks)
+            }
 
             with tqdm(total=len(upload_tasks), disable=not display) as progress_bar:
                 for future in as_completed(future_to_idx):
                     progress_bar.update(1)
 
         return None
-     
 
     def upload_directory(self, path: str, prefix: str = "") -> None:
         """
@@ -433,14 +475,16 @@ class StorageS3(Storage):
                 content_type, _ = mimetypes.guess_type(path)
                 if content_type is None:
                     # Default to binary if we can't determine the type
-                    content_type = 'application/octet-stream'
+                    content_type = "application/octet-stream"
 
                 all_files.append(local_path)
                 all_keys.append(s3_key)
                 all_content_types.append(content_type)
 
         print(f"StorageS3 >> Found {len(all_files)} files to upload from '{path}'.")
-        self.upload_files(keys=all_keys, paths=all_files, content_types=all_content_types)
+        self.upload_files(
+            keys=all_keys, paths=all_files, content_types=all_content_types
+        )
         print(f"StorageS3 >> Directory upload complete")
 
         return None

@@ -9,7 +9,12 @@ from database import DatabaseSearchElasticsearch
 # Test import and init
 elasic_api = DatabaseSearchElasticsearch()
 
-print(elasic_api._hash_content(content='Message from Caroline: Merry Christmast!', prefixes=['2024/12/25', '103010']))
+print(
+    elasic_api._hash_content(
+        content="Message from Caroline: Merry Christmast!",
+        prefixes=["2024/12/25", "103010"],
+    )
+)
 # elasic_api.create_table(index_name="test")
 
 indexes = elasic_api.list_indexes()

@@ -9,10 +9,13 @@ class StorageServer(Storage):
     """
     Standard S3 class with all purpose methods.
     """
-    def __init__(self, 
-                 bucket_name: str,
-                 endpoint: str = "http://localhost:8000",
-                 tmp_dir: Optional[str] = None) -> None:
+
+    def __init__(
+        self,
+        bucket_name: str,
+        endpoint: str = "http://localhost:8000",
+        tmp_dir: Optional[str] = None,
+    ) -> None:
         """
         Initiates a connection to a custom storage server.
 
@@ -39,6 +42,23 @@ class StorageServer(Storage):
         """
         super().__init__(bucket_name=bucket_name, tmp_dir=tmp_dir)
 
+    def create_bucket(self):
+        return super().create_bucket()
+
+    def delete_files(self, keys: str | list[str]):
+        return super().delete_files(keys)
+
+    def download_directory(self, key: str, path: str | None = None) -> None:
+        return super().download_directory(key, path)
+
+    def download_files(self, keys: str | list[str], paths: str | list[str] | None):
+        return super().download_files(keys, paths)
+
+    def list_files(self, key: str | None):
+        return super().list_files(key)
+
+    def upload_files(self, paths: str | list[str], keys: str | list[str] | None):
+        return super().upload_files(paths, keys)
 
     def upload_directory(self, path: str):
         raise NotImplementedError

@@ -5,31 +5,34 @@ from concurrent.futures import ThreadPoolExecutor
 
 from .Storage import Storage
 
+
 class StorageMinIO(Storage):
     """
     MinIO helper.
     """
-    def __init__(self,
-                 bucket_name: str = "storage",
-                 endpoint="http://localhost:9000",
-                 access_key="admin",
-                 secret_key="password",
-                 region_name="eu-west-1"):
+
+    def __init__(
+        self,
+        bucket_name: str = "storage",
+        endpoint="http://localhost:9000",
+        access_key="admin",
+        secret_key="password",
+        region_name="eu-west-1",
+    ):
         """
         MinIO helper
         """
         super().__init__(bucket_name=bucket_name)
 
         self.s3_client = boto3.client(
-            service_name='s3',
+            service_name="s3",
             endpoint_url=endpoint,
             aws_access_key_id=access_key,
             aws_secret_access_key=secret_key,
-            region_name=region_name
+            region_name=region_name,
         )
 
         return None
-
 
     def create_bucket(self):
         """
@@ -41,8 +44,9 @@ class StorageMinIO(Storage):
         except Exception as e:
             print(f"Create bucket failed: {e}")
 
-
-    def upload_files(self, paths: Union[str, list[str]], keys: Optional[Union[str, list[str]]] = None):
+    def upload_files(
+        self, paths: Union[str, list[str]], keys: Optional[Union[str, list[str]]] = None
+    ):
         """
         Uploads files to the remote storage.
         """
@@ -65,13 +69,14 @@ class StorageMinIO(Storage):
             for path, key in zip(paths, keys):
                 executor.submit(_upload_file, path, key)
 
-
-    def download_files(self, keys: Union[str, list[str]], paths: Optional[Union[str, list[str]]]):
+    def download_files(
+        self, keys: Union[str, list[str]], paths: Optional[Union[str, list[str]]]
+    ):
         """
         Downloads files from the remote storage.
         """
 
-        def _download_file( object_key: str, file_path: str):
+        def _download_file(object_key: str, file_path: str):
             try:
                 self.s3_client.download_file(self.bucket_name, object_key, file_path)
                 print(f"Downloaded {self.bucket_name}/{object_key} to {file_path}")
@@ -88,7 +93,6 @@ class StorageMinIO(Storage):
         with ThreadPoolExecutor() as executor:
             for key, path in zip(keys, paths):
                 executor.submit(_download_file, key, path)
-
 
     def delete_files(self, keys: Union[str, list[str]]):
         """
@@ -109,21 +113,21 @@ class StorageMinIO(Storage):
             for key in keys:
                 executor.submit(_delete_file, key)
 
-
     def list_files(self, key: Optional[str] = None):
         """
         Lists files from remote storage, starting down to the root (or from the key) up to the leaves.
         """
         try:
             if key:
-                response = self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=key)
+                response = self.s3_client.list_objects_v2(
+                    Bucket=self.bucket_name, Prefix=key
+                )
             else:
                 response = self.s3_client.list_objects_v2(Bucket=self.bucket_name)
-            return [item['Key'] for item in response.get('Contents', [])]
+            return [item["Key"] for item in response.get("Contents", [])]
         except Exception as e:
             print(f"list failed: {e}")
             return []
-
 
     def upload_directory(self, path: str):
         raise NotImplementedError

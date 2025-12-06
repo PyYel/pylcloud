@@ -5,10 +5,12 @@ from typing import Optional, Union
 from pathlib import Path
 import mimetypes
 
+
 class Storage(ABC):
     """
     Inetrnal storage services helper.
     """
+
     def __init__(self, bucket_name: str = "storage", tmp_dir: Optional[str] = None):
         """
         Initializes the helper.
@@ -24,12 +26,11 @@ class Storage(ABC):
         else:
             self.tmp_dir = tmp_dir
 
-         # TODO: Add connection certificate
+        # TODO: Add connection certificate
 
         self._init_mimetypes()
 
         return None
-
 
     def _init_mimetypes(self):
 
@@ -37,16 +38,15 @@ class Storage(ABC):
         mimetypes.init()
 
         # Add specific mappings that might be missing
-        mimetypes.add_type('text/html', '.html')
-        mimetypes.add_type('text/css', '.css')
-        mimetypes.add_type('application/javascript', '.js')
-        mimetypes.add_type('application/json', '.json')
-        mimetypes.add_type('image/svg+xml', '.svg')
-        mimetypes.add_type('application/rdf+xml', '.owl')
-        mimetypes.add_type('text/turtle', '.ttl')
+        mimetypes.add_type("text/html", ".html")
+        mimetypes.add_type("text/css", ".css")
+        mimetypes.add_type("application/javascript", ".js")
+        mimetypes.add_type("application/json", ".json")
+        mimetypes.add_type("image/svg+xml", ".svg")
+        mimetypes.add_type("application/rdf+xml", ".owl")
+        mimetypes.add_type("text/turtle", ".ttl")
 
         return None
-
 
     @abstractmethod
     def create_bucket(self):
@@ -54,23 +54,24 @@ class Storage(ABC):
         Creates the chosen bucket if it does not exist.
         """
         raise NotImplementedError
-    
 
     @abstractmethod
-    def upload_files(self, paths: Union[str, list[str]], keys: Optional[Union[str, list[str]]]):
+    def upload_files(
+        self, paths: Union[str, list[str]], keys: Optional[Union[str, list[str]]]
+    ):
         """
         Uploads files to the remote storage.
         """
         raise NotImplementedError
 
-
     @abstractmethod
-    def download_files(self, keys: Union[str, list[str]], paths: Optional[Union[str, list[str]]]):
+    def download_files(
+        self, keys: Union[str, list[str]], paths: Optional[Union[str, list[str]]]
+    ):
         """
         Downloads files from the remote storage.
         """
         raise NotImplementedError
-
 
     @abstractmethod
     def delete_files(self, keys: Union[str, list[str]]):
@@ -79,7 +80,6 @@ class Storage(ABC):
         """
         raise NotImplementedError
 
-
     @abstractmethod
     def list_files(self, key: Optional[str]):
         """
@@ -87,11 +87,10 @@ class Storage(ABC):
         """
         raise NotImplementedError
 
-
     @abstractmethod
     def upload_directory(self, path: str, key: Optional[str] = None) -> None:
         """
-        Uploads an entire local directory to remote storage, while preserving its structure 
+        Uploads an entire local directory to remote storage, while preserving its structure
         and setting appropriate content types based on file extensions.
         """
         raise NotImplementedError
@@ -99,30 +98,33 @@ class Storage(ABC):
     @abstractmethod
     def download_directory(self, key: str, path: Optional[str] = None) -> None:
         """
-        Uploads an entire local directory to remote storage, while preserving its structure 
+        Uploads an entire local directory to remote storage, while preserving its structure
         and setting appropriate content types based on file extensions.
         """
         raise NotImplementedError
 
+    def _check_args(
+        self,
+        keys: Optional[Union[str, list[str]]],
+        paths: Optional[Union[str, list[str]]],
+    ):
+        """ """
 
-    def _check_args(self, keys: Optional[Union[str, list[str]]], paths: Optional[Union[str, list[str]]]):
-        """
-        
-        """
-        
         if isinstance(keys, str):
             keys = list(keys)
         if isinstance(paths, str):
             paths = list(paths)
         if not isinstance(keys, list):
-            print(f"Storage >> Argument keys is of type {type(keys)} instead of list[str]. Operations will be aborted.")
+            print(
+                f"Storage >> Argument keys is of type {type(keys)} instead of list[str]. Operations will be aborted."
+            )
             return [], []
         if paths is None:
             paths = [os.path.join(self.tmp_dir, path) for path in keys]
         if not all([os.path.exists(os.path.dirname(path)) for path in paths]):
             print("Storage >> Paths do not exist. Operation will be aborted.")
             return [], []
-        
+
         return keys, paths
 
     def _normalize_paths(self, absolute_paths: Union[str, list[str]]) -> list[str]:
@@ -133,7 +135,7 @@ class Storage(ABC):
 
         if isinstance(absolute_paths, str):
             absolute_paths = list(absolute_paths)
-        
+
         normalized_paths = []
         home = Path.home()
         for input_path in absolute_paths:
@@ -149,15 +151,16 @@ class Storage(ABC):
             except ValueError:
                 pass
 
-            normalized_paths.append(str(path).replace("\\", "/"))  # Always return POSIX-style
+            normalized_paths.append(
+                str(path).replace("\\", "/")
+            )  # Always return POSIX-style
 
         return normalized_paths
 
-
     def _hash_content(self, content: str, prefixes: list[str] = []):
         """
-        Hashes a document content into a unique id of format <prefixes>-<hashed_content>. This is usefull to automatically overwrite 
-        a stored document when a document with the same timestamp and content is written into Elasticsearch. 
+        Hashes a document content into a unique id of format <prefixes>-<hashed_content>. This is usefull to automatically overwrite
+        a stored document when a document with the same timestamp and content is written into Elasticsearch.
 
         Parameters
         ----------

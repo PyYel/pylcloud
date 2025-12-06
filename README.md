@@ -1,4 +1,4 @@
-# PyYel-CloudOps
+# PyYel Cloud Ops
 
 The PyYel Cloud Operations extension. This repository regroups tools to simplify and speed up Python application deployment process.
 
