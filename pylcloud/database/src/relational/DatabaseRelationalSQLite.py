@@ -4,12 +4,14 @@ import os
 from typing import Union, Optional
 
 from .DatabaseRelational import DatabaseRelational
+from pylcloud import _config_logger
 
 
 class DatabaseRelationalSQLite(DatabaseRelational):
     """
     A class that manages SQLite database operations.
     """
+
     def __init__(self, database_path: str = "database.db") -> None:
         """
         Initializes the SQLite database helper and connects to the database file.
@@ -20,17 +22,20 @@ class DatabaseRelationalSQLite(DatabaseRelational):
         database_path: str, '../database.db'
             The path to the SQLite database file. Default path is the current working directory.
         """
-        super().__init__(logs_name="DatabaseSQLite")
-        
+        super().__init__()
+
+        self.logger = _config_logger(logs_name="DatabaseRelationalSQLite")
+
         self.database_path = database_path
         try:
             self.conn = self.connect_database(database_path=self.database_path)
         except Exception as e:
-            print(f"DatabaseSQLite >> An error occured when connecting to '{os.path.basename(database_path)}': {e}")
+            self.logger.info(
+                f"An error occured when connecting to '{os.path.basename(database_path)}': {e}"
+            )
 
         return None
-    
-    
+
     def connect_database(self, database_path: str):
         """
         Connects to the SQLite database file and returns a connection object.
@@ -48,14 +53,11 @@ class DatabaseRelationalSQLite(DatabaseRelational):
         """
         try:
             self.conn = sqlite3.connect(database_path)
-            print(f"DatabaseSQLite >> Connected to database at '{database_path}'.")
+            self.logger.info(f"Connected to database at '{database_path}'.")
             return self.conn
         except sqlite3.Error as e:
-            print(f"DatabaseSQLite >> SQLite error: {e}")
-            sys.exit(1)
-
+            self.logger.error(f"SQLite error: {e}")
         return None
-    
 
     def create_table(self, table_name: str, column_definitions: list[str]):
         """
@@ -77,28 +79,27 @@ class DatabaseRelationalSQLite(DatabaseRelational):
             create_table_sql = f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(column_definitions)})"
             cursor.execute(create_table_sql)
             self.conn.commit()
-            print(f"DatabaseSQLite >> Table '{table_name}' created successfully.")
+            self.logger.info(f"Table '{table_name}' created successfully.")
         except sqlite3.Error as e:
-            print(f"DatabaseSQLite >> SQLite error when creating table '{table_name}': {e}")
-    
+            self.logger.error(f"SQLite error when creating table '{table_name}': {e}")
+
         return None
-    
-    
+
     def delete_data(self):
         raise NotImplementedError
-    
-    
+
     def disconnect_database(self):
         """
         Closes the connection to the SQLite database.
         """
         if self.conn:
             self.conn.close()
-            print(f"DatabaseSQLite >> Disconnected from database '{os.path.basename(self.database_path)}'.")
+            self.logger.info(
+                f"Disconnected from database '{os.path.basename(self.database_path)}'."
+            )
 
         return None
-    
-    
+
     def drop_database(self, database_path: Optional[str] = None):
         """
         Drops a database by deleting the .db local file. If no path is specified,
@@ -115,10 +116,13 @@ class DatabaseRelationalSQLite(DatabaseRelational):
 
         try:
             os.remove(database_path)
-            print(f"DatabaseSQLite >> Successfully deleted '{os.path.basename(database_path)}'.")
+            self.logger.info(
+                f"Successfully deleted '{os.path.basename(database_path)}'."
+            )
         except Exception as e:
-            print(f"DatabaseSQLite >> Could not delete '{os.path.basename(database_path)}': {e}")
-
+            self.logger.error(
+                f"Could not delete '{os.path.basename(database_path)}': {e}"
+            )
 
     def drop_table(self, table_name: str):
         """
@@ -133,19 +137,22 @@ class DatabaseRelationalSQLite(DatabaseRelational):
             cursor = self.conn.cursor()
             cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
             self.conn.commit()
-            print(f"DatabaseSQLite >> Table '{table_name}' dropped successfully.")
+            self.logger.info(f"Table '{table_name}' dropped successfully.")
         except sqlite3.Error as e:
-            print(f"DatabaseSQLite >> SQLite error when dropping table '{table_name}': {e}")
+            self.logger.error(f"SQLite error when dropping table '{table_name}': {e}")
 
         return None
 
+    def describe(self):
+        """ """
+        print(self.list_tables())
+        return None
 
     def list_databases(self):
         """
         SQLite can only be connected at one database at once, so this won't do anything but return the current database.
         """
         return [self.database_path]
-
 
     def list_tables(self):
         """
@@ -160,18 +167,19 @@ class DatabaseRelationalSQLite(DatabaseRelational):
             cursor = self.conn.cursor()
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
             tables = [row[0] for row in cursor.fetchall()]
-            print(f"DatabaseSQLite >> Tables in database: {', '.join(tables)}")
+            self.logger.info(f"Tables in database: {', '.join(tables)}")
             return tables
         except sqlite3.Error as e:
-            print(f"DatabaseSQLite >> SQLite error when listing tables: {e}")
+            self.logger.error(f"SQLite error when listing tables: {e}")
             return []
-        
-    
-    def query_data(self, 
-                   table_name: str, 
-                   columns: str = "*", 
-                   condition: Optional[str] = None, 
-                   values: Optional[tuple[str, Union[str, float, int]]] = None):
+
+    def query_data(
+        self,
+        table_name: str,
+        columns: str = "*",
+        condition: Optional[str] = None,
+        values: Optional[tuple[str, Union[str, float, int]]] = None,
+    ):
         """
         Retrieves data from a table under a specific condition.
 
@@ -197,12 +205,14 @@ class DatabaseRelationalSQLite(DatabaseRelational):
                 rows = cursor.fetchall()
                 return rows
             except sqlite3.Error as e:
-                print(f"DatabaseSQLite >> SQLite error when selecting data from table '{table_name}': {e}")
+                self.logger.error(
+                    f"SQLite error when selecting data from table '{table_name}': {e}"
+                )
                 return []
             except:
                 # If there is no match
                 return []
-            
+
         elif (condition is not None) and (values is not None):
             try:
                 cursor = self.conn.cursor()
@@ -211,13 +221,14 @@ class DatabaseRelationalSQLite(DatabaseRelational):
                 rows = cursor.fetchall()
                 return rows
             except sqlite3.Error as e:
-                print(f"DatabaseSQLite >> SQLite error when selecting data with condition: {e}")
+                self.logger.error(
+                    f"SQLite error when selecting data with condition: {e}"
+                )
                 return []
 
         else:
-            print(f"DatabaseSQLite >> Condition and values must both be filled.")
+            self.logger.warning(f"Condition and values must both be filled.")
             return []
-
 
     def send_data(self, table_name: str, **kwargs):
         """
@@ -236,13 +247,18 @@ class DatabaseRelationalSQLite(DatabaseRelational):
         """
         try:
             cursor = self.conn.cursor()
-            columns = ', '.join(kwargs.keys())
-            placeholders = ', '.join(['?'] * len(kwargs))
+            columns = ", ".join(kwargs.keys())
+            placeholders = ", ".join(["?"] * len(kwargs))
             values = tuple(kwargs.values())
-            cursor.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", values)
+            cursor.execute(
+                f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", values
+            )
             self.conn.commit()
-            print(f"DatabaseSQLite >> Data inserted into table '{table_name}'.")
+            self.logger.info(f"Data inserted into table '{table_name}'.")
+
         except sqlite3.Error as e:
-            print(f"DatabaseSQLite >> SQLite error when inserting data into table '{table_name}': {e}")
+            self.logger.error(
+                f"SQLite error when inserting data into table '{table_name}': {e}"
+            )
 
         return None

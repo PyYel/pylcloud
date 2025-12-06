@@ -5,7 +5,7 @@ from typing import Optional
 from datetime import datetime
 from abc import ABC, abstractmethod
 
-from database import Database
+from ..Database import Database
 
 
 class DatabaseRelational(Database):
@@ -14,8 +14,7 @@ class DatabaseRelational(Database):
     """
 
     def __init__(self):
-        """
-        """
+        """ """
         super().__init__()
 
         return None

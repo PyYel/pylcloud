@@ -1,8 +1,6 @@
-import websocket
 import json
 import logging
 from contextlib import closing
-import websocket
 import requests
 from uuid import uuid4
 import base64
@@ -15,8 +13,7 @@ from collections.abc import Generator
 import heapq
 
 from gpt import GPT
-from constants import AWS_ACCESS_KEY_SECRET, AWS_ACCESS_KEY_ID, AWS_REGION_NAME, LOGS_DIR
-
+from pylcloud import _config_logger
 
 class GPTAWS(GPT):
     """
@@ -27,14 +24,19 @@ class GPTAWS(GPT):
         Initializes a self-contained connection to the AWS Bedrock API.
 
         This only supports generative AI. 
+
+        Parameters
+        ----------
+        
         """
-        super().__init__(logs_name="GPTAWS", logs_dir=LOGS_DIR)
-    
+        super().__init__()
+        
+        self.logger = _config_logger(logs_name="GPTAWS")
         
         self.bedrock_client = boto3.client(service_name="bedrock",
-                                            aws_access_key_id=AWS_ACCESS_KEY_ID,
-                                            aws_secret_access_key=AWS_ACCESS_KEY_SECRET,
-                                            region_name=AWS_REGION_NAME,)
+                                            aws_access_key_id=kwargs.get("AWS_ACCESS_KEY_ID"),
+                                            aws_secret_access_key=kwargs.get("AWS_ACCESS_KEY_SECRET"),
+                                            region_name=kwargs.get("AWS_REGION_NAME"),)
                                             #aws_session_token=aws_session_token)
 
         self.bedrock_runtime_client = boto3.client(service_name="bedrock-runtime",

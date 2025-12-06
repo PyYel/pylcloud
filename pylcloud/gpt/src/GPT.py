@@ -12,70 +12,25 @@ from nltk.data import find
 import logging
 from datetime import datetime
 
-from constants import INFERENCE_TYPE, AWS_REGION_NAME, MAIN_DIR, LOGS_DIR
-
+from pylcloud import _config_logger
 
 class GPT(ABC):
     """
     Base class for generative AI inference.
     """
-    def __init__(self,
-                 logs_name: str,
-                 logs_dir: Optional[str] = None):
+    def __init__(self):
         super().__init__()
 
+        # Default logger fallback
+        self.logger = _config_logger(logs_name="GPT")
+        
         self._download_nltk_data()
-
-        self._config_logger(logs_name=logs_name, logs_dir=logs_dir)
-
+        
         self.available_models = {}
         self.costs: dict[str, dict[str, float]] = {}
 
         return None
 
-
-    def _config_logger(self, 
-                       logs_name: str, 
-                       logs_dir: Optional[str] = None, 
-                       logs_level: str = os.getenv("LOGS_LEVEL", "INFO"),
-                       logs_output: list[str] = ["console", "file"]):
-        """
-        Will configure logging accordingly to the plateform the program is running on.
-        """
-
-        if logs_dir is None:
-            logs_dir = os.path.join(os.getcwd(), "logs", str(datetime.now().strftime("%Y-%m-%d")))
-        else: 
-            logs_dir = os.path.join(logs_dir, str(datetime.now().strftime("%Y-%m-%d")))
-        os.makedirs(logs_dir, exist_ok=True)
-
-        self.logger = logging.getLogger(logs_name)
-        self.logger.setLevel(logging.DEBUG)
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-        # If a logger already exists, this prevents duplication of the logger handlers
-        if self.logger.hasHandlers():
-            for handler in self.logger.handlers:
-                handler.close()
-
-        # Creates/recreates the handler(s)
-        if not self.logger.hasHandlers():
-
-            if "console" in logs_output:
-                console_handler = logging.StreamHandler()
-                console_handler.setLevel(logging._nameToLevel[logs_level])
-                console_handler.setFormatter(formatter)
-                self.logger.addHandler(console_handler)
-                self.logger.info("Logging handler configured for console output.")
-
-            if "file" in logs_output:
-                file_handler = logging.FileHandler(os.path.join(logs_dir, f"{datetime.now().strftime('%H-%M-%S')}-app.log"))
-                file_handler.setLevel(logging._nameToLevel[logs_level])
-                file_handler.setFormatter(formatter)
-                self.logger.addHandler(file_handler)
-                self.logger.info("Logging handler configured for file output.")
-
-        return None
     
     def compute_costs(self, model_name: str, usage: dict[str, int]) -> dict[str, float]:
         """

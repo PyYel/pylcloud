@@ -8,10 +8,12 @@ from abc import ABC, abstractmethod
 
 from database import Database
 
+
 class DatabaseSearch(Database):
     """
     Databases API helper.
     """
+
     def __init__(self, logs_name: str):
         """
         Initializes the helper and its logging.
@@ -20,14 +22,12 @@ class DatabaseSearch(Database):
 
         return None
 
-
     @abstractmethod
     def create_index(self, *args, **kwargs):
         """
         Creates a new index/collection.
         """
         raise NotImplementedError
-
 
     @abstractmethod
     def drop_index(self, *args, **kwargs):
@@ -36,7 +36,6 @@ class DatabaseSearch(Database):
         """
         raise NotImplementedError
 
-    
     @abstractmethod
     def list_indexes(self, *args, **kwargs):
         """

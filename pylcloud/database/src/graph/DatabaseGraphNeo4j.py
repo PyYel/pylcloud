@@ -6,10 +6,12 @@ from datetime import datetime
 
 from .DatabaseGraph import DatabaseGraph
 
+
 class DatabaseGraphNeo4j(DatabaseGraph):
     """
     Databases API helper.
     """
+
     def __init__(self, logs_name: str):
         """
         Initializes the helper and its logging.
