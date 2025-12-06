@@ -11,10 +11,13 @@ requires-python = ">=3.6"
 authors = [
     { name="Maxime BLIDI", email="blidi.maxime@gmail.com" }
 ]
-
 dependencies = [
     "tqdm",
     "python-dotenv==1.0.1",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
 ]
 
 [project.optional-dependencies]
@@ -30,12 +33,6 @@ storage = ["boto3"]
 gpt = [
     "nltk", 
     "requests",
-]
-
-
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "Operating System :: OS Independent",
 ]
 
 [tool.setuptools.packages.find]
