@@ -19,7 +19,7 @@ cd /d %~dp0..
 echo %COLOR_CYAN%Project root: %CD%%COLOR_RESET%
 
 REM Activate virtual environment
-echo.
+echo:
 echo %COLOR_BLUE%Activating virtual environment...%COLOR_RESET%
 call .venv\Scripts\activate.bat
 if errorlevel 1 (
@@ -29,16 +29,27 @@ if errorlevel 1 (
 )
 echo %COLOR_GREEN%Virtual environment activated successfully%COLOR_RESET%
 
+REM Install package manager uv
+echo:
+echo %COLOR_BLUE%Installing package manager...%COLOR_RESET%
+pip install uv --quiet
+if errorlevel 1 (
+    echo %COLOR_RED%ERROR: Failed to install uv%COLOR_RESET%
+    pause
+    exit /b 1
+)
+echo %COLOR_GREEN%Package manager installed successfully%COLOR_RESET%
+
 REM Install package in editable mode
-echo.
-echo %COLOR_BLUE%Installing package in editable mode...%COLOR_RESET%
-pip install -e . --quiet
+echo:
+echo %COLOR_BLUE%Installing packages in editable mode...%COLOR_RESET%
+uv pip install -e . --quiet
 if errorlevel 1 (
     echo %COLOR_RED%ERROR: Failed to install package%COLOR_RESET%
     pause
     exit /b 1
 )
-echo %COLOR_GREEN%Package installed successfully%COLOR_RESET%
+echo %COLOR_GREEN%Packages installed successfully%COLOR_RESET%
 
 REM Find and run all main.py files in test folders
 echo.
@@ -56,7 +67,7 @@ for /r "pylcloud" %%f in (main.py) do (
     echo !filepath! | findstr /i "\\test\\" >nul
     if not errorlevel 1 (
         set /a TEST_COUNT+=1
-        echo.
+        echo:
         echo %COLOR_CYAN%----------------------------------------%COLOR_RESET%
         echo %COLOR_CYAN%[!TEST_COUNT!] Running: %%f%COLOR_RESET%
         echo %COLOR_CYAN%----------------------------------------%COLOR_RESET%
