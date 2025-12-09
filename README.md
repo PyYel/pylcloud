@@ -1,4 +1,23 @@
-# PyYel-CloudOps
+<p align="center">
+  <img src="https://imgur.com/pvQusPg.png" width="320" alt="CLOUDOPS">
+</p>
+
+<p align="center">
+    <img src="https://img.shields.io/badge/Boto3-AWS-FF9900?logo=amazonaws&logoColor=white" />
+    <img src="https://img.shields.io/badge/AWS4Auth-Signed%20Requests-232F3E?logo=amazonaws&logoColor=white" />
+    <img src="https://img.shields.io/badge/MySQL-Connector-4479A1?logo=mysql&logoColor=white" />
+    <img src="https://img.shields.io/badge/PostgreSQL-psycopg2-336791?logo=postgresql&logoColor=white" />
+    <img src="https://img.shields.io/badge/OpenSearch-enabled-005EB8" />
+    <img src="https://img.shields.io/badge/Elasticsearch-enabled-005571?logo=elasticsearch&logoColor=white" />
+    <img src="https://img.shields.io/badge/FastAPI-latest-009688?logo=fastapi&logoColor=white" />
+    <img src="https://img.shields.io/badge/Uvicorn-ASGI-4051B5" />
+    <img src="https://img.shields.io/badge/TQDM-latest-FFC107?logo=python&logoColor=black" />
+    <img src="https://img.shields.io/badge/Dotenv-1.0.1-ECD53F?logo=python&logoColor=black" />
+    <img src="https://img.shields.io/badge/code%20style-black-000000.svg" />
+</p>
+
+
+# PyYel Cloud Ops
 
 The PyYel Cloud Operations extension. This repository regroups tools to simplify and speed up Python application deployment process.
 
