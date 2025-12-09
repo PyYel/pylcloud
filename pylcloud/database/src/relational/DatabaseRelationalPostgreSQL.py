@@ -10,6 +10,7 @@ import boto3
 import psycopg2._psycopg
 
 from .DatabaseRelational import DatabaseRelational
+from pylcloud import _config_logger
 
 
 class DatabaseRelationalPostgreSQL(DatabaseRelational):
@@ -17,19 +18,20 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
     A class to manage PostgreSQL databases (RDS, Aurora, local) with optional IAM authentication.
     """
 
-    def __init__(self,
-                 host: str = "127.0.0.1",
-                 database: str = "app_database",
-                 schema: str = "app_schema",
-                 user: str = "app_user",
-                 password: Optional[str] = None,
-                 port: str = "5432",
-                 ssl_mode: Optional[str] = None,
-                 connection_timeout: int = 30,
-                 aws_access_key_id: Optional[str] = None,
-                 aws_secret_access_key: Optional[str] = None,
-                 aws_region_name: Optional[str] = None,
-                 ) -> None:
+    def __init__(
+        self,
+        host: str = "127.0.0.1",
+        database: str = "app_database",
+        schema: str = "app_schema",
+        user: str = "app_user",
+        password: Optional[str] = None,
+        port: str = "5432",
+        ssl_mode: Optional[str] = None,
+        connection_timeout: int = 30,
+        aws_access_key_id: Optional[str] = None,
+        aws_secret_access_key: Optional[str] = None,
+        aws_region_name: Optional[str] = None,
+    ) -> None:
         """
         A high-level interface for PostgreSQL server database, compatible with standard PostgreSQL, 
         AWS Aurora PostgreSQL, and AWS RDS PostgreSQL.
@@ -38,13 +40,14 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
 
         Parameters
         ----------
-        schema: str
-            The name of the schema (can be seen as the database name) to connect to. Having multiple databases on a same server is not
-            supported, so the server management is limited to schema level. 
         host: str
             The host/address of the database server.
             - When connecting to a local server, the IP of host computer
             - When connecting to AWS, the address of the read/write endpoint
+        database: str
+            The name of the database to connect to within the host server.
+        schema: str
+            The name of the database schema to use (will set ``search_path`` to this default value). 
         user: str
             The user to assume when interacting with the DB
             - Must be an existing DB user
@@ -77,6 +80,8 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         """
         super().__init__()
 
+        self.logger = _config_logger(logs_name="DatabaseRelationalPostreSQL")
+
         self.host = host
         self.database = database
         self.schema = schema.lower().replace("-", "_").replace(" ", "_")
@@ -91,7 +96,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         self.conn: psycopg2._psycopg.connection = None  # type: ignore
 
         register_uuid()
-        register_type(UNICODE) # Register UUID type
+        register_type(UNICODE)  # Register UUID type
 
         return None
 
@@ -108,20 +113,146 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             else:
                 self.logger.error("Could not run SQL query, connection is closed.")
         except Exception as e:
-            self.logger.error(f"SQL query failed: {query_str} | Error: {e}", exc_info=True)
-        
+            self.logger.error(
+                f"SQL query failed: {query_str} | Error: {e}", exc_info=True
+            )
+
         return None
 
+    def _init_db(
+        self,
+        database: str = "app_database",
+        schema: str = "app_schema",
+        user: str = "app_user",
+        master_user: str = "postgres",
+        master_password: Optional[str] = "password",
+    ):
+        """
+        Initialize the target database, schema, and user with automatic IAM vs password detection.
+        - If master_password is None → IAM token authentication is used.
+        """
 
-    def connect_database(self, 
-                         database: str, 
-                         user: str, 
-                         password: Optional[str] = None):
+        schema = schema.lower().replace("-", "_").replace(" ", "_")
+        iam_mode = (
+            True
+            if self.aws_access_key_id is not None
+            and self.aws_region_name is not None
+            and self.aws_secret_access_key is not None
+            else False
+        )
+        self.logger.info(
+            f"Initializing DB '{database}', schema '{schema}', user '{user}' "
+            f"using {'IAM' if iam_mode else 'password'} auth"
+        )
+
+        # 1. Connect to 'postgres' as master
+        self.connect_database("postgres", master_user, master_password)
+
+        # 2. Create target DB if missing
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(
+                    sql.SQL("CREATE DATABASE {}").format(sql.Identifier("app_database"))
+                )
+            self.conn.close()
+        except Exception as e:
+            if "already exists" in str(e):
+                self.logger.warning(
+                    f"Database '{database}' already exists and won't be recreated unless dropped."
+                )
+            else:
+                self.logger.error(str(e))
+
+        # 3. Connect to target DB
+        self.connect_database(database, master_user, master_password)
+
+        # 4. Create app user
+        self._run(
+            sql.SQL(
+                "DO $$ BEGIN CREATE ROLE {} LOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;"
+            ).format(sql.Identifier(user))
+        )
+        if iam_mode:
+            self._run(sql.SQL("GRANT rds_iam TO {};").format(sql.Identifier(user)))
+
+        # 5. Lock down public schema
+        self._run("REVOKE CREATE ON SCHEMA public FROM PUBLIC;")
+        self._run(
+            sql.SQL("REVOKE ALL ON DATABASE {} FROM PUBLIC;").format(
+                sql.Identifier(database)
+            )
+        )
+
+        # 6. Create schema safely
+        self._run(
+            sql.SQL("CREATE SCHEMA IF NOT EXISTS {};").format(sql.Identifier(schema))
+        )
+        self._run(
+            sql.SQL("ALTER SCHEMA {} OWNER TO {};").format(
+                sql.Identifier(schema), sql.Identifier(user)
+            )
+        )
+
+        # 7. Grant privileges
+        self._run(
+            sql.SQL("GRANT CONNECT ON DATABASE {} TO {};").format(
+                sql.Identifier(database), sql.Identifier(user)
+            )
+        )
+        self._run(
+            sql.SQL("GRANT USAGE ON SCHEMA {} TO {};").format(
+                sql.Identifier(schema), sql.Identifier(user)
+            )
+        )
+        self._run(
+            sql.SQL(
+                "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA {} TO {};"
+            ).format(sql.Identifier(schema), sql.Identifier(user))
+        )
+        self._run(
+            sql.SQL(
+                "GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA {} TO {};"
+            ).format(sql.Identifier(schema), sql.Identifier(user))
+        )
+
+        # 8. Default privileges for future objects
+        self._run(
+            sql.SQL(
+                """
+            ALTER DEFAULT PRIVILEGES IN SCHEMA {}
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {};
+        """
+            ).format(sql.Identifier(schema), sql.Identifier(user))
+        )
+        self._run(
+            sql.SQL(
+                """
+            ALTER DEFAULT PRIVILEGES IN SCHEMA {}
+            GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO {};
+        """
+            ).format(sql.Identifier(schema), sql.Identifier(user))
+        )
+
+        # 9. Set search_path
+        self._run(
+            sql.SQL("SET search_path TO {}, public;").format(sql.Identifier(schema))
+        )
+        self.logger.info(
+            f"DB setup complete: Database={database}, Schema={schema}, User={user} (IAM={iam_mode})"
+        )
+
+        return None
+
+    def connect_database(
+        self, database: str, user: str, password: Optional[str] = None
+    ):
         """
         Get a psycopg2 ``conn`` connection to a specified database.
         """
 
-        def _get_connection_params(database: str, connect_user: str, password: Optional[str]):
+        def _get_connection_params(
+            database: str, connect_user: str, password: Optional[str]
+        ):
             """
             Build psycopg2 connection parameters.
             If password is None → generate IAM token.
@@ -138,7 +269,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
                 params["sslmode"] = self.ssl_mode
 
             # IAM auth if no password
-            if password is None or password=="":
+            if password is None or password == "":
                 self.logger.info(f"Using IAM auth for user '{connect_user}'")
                 client = boto3.client(
                     "rds",
@@ -163,9 +294,9 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         # Enforce disconnection from other DB
         try:
             self.conn.close()
-            self.conn = None # type: ignore
+            self.conn = None  # type: ignore
         except:
-            self.conn = None # type: ignore
+            self.conn = None  # type: ignore
 
         try:
             conn_params = _get_connection_params(database, user, password)
@@ -179,85 +310,10 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             self.logger.info(f"Connector path set to: '{self.schema}'.")
 
             return None
-        
+
         except Exception as e:
             self.logger.critical(f"Database connection failed: {e}")
             return None
-
-
-    def _init_db(self,
-                database: str = "app_database",
-                schema: str = "app_schema",
-                user: str = "app_user",
-                master_user: str = "postgres",
-                master_password: Optional[str] = "password"):
-        """
-        Initialize the target database, schema, and user with automatic IAM vs password detection.
-        - If master_password is None → IAM token authentication is used.
-        """
-
-        schema = schema.lower().replace("-", "_").replace(" ", "_")
-        iam_mode = True if self.aws_access_key_id is not None and self.aws_region_name is not None and self.aws_secret_access_key is not None else False
-        self.logger.info(
-            f"Initializing DB '{database}', schema '{schema}', user '{user}' "
-            f"using {'IAM' if iam_mode else 'password'} auth"
-        )
-
-        # 1. Connect to 'postgres' as master
-        self.connect_database("postgres", master_user, master_password)
-
-        # 2. Create target DB if missing
-        try:
-            with self.conn.cursor() as cur:
-                cur.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier("app_database")))
-            self.conn.close()
-        except Exception as e:
-            if "already exists" in str(e):
-                self.logger.warning(f"Database '{database}' already exists and won't be recreated unless dropped.")
-            else:
-                self.logger.error(str(e))
-
-        # 3. Connect to target DB
-        self.connect_database(database, master_user, master_password)
-
-        # 4. Create app user
-        self._run(sql.SQL("DO $$ BEGIN CREATE ROLE {} LOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;")
-                .format(sql.Identifier(user)))
-        if iam_mode:
-            self._run(sql.SQL("GRANT rds_iam TO {};").format(sql.Identifier(user)))
-
-        # 5. Lock down public schema
-        self._run("REVOKE CREATE ON SCHEMA public FROM PUBLIC;")
-        self._run(sql.SQL("REVOKE ALL ON DATABASE {} FROM PUBLIC;").format(sql.Identifier(database)))
-
-        # 6. Create schema safely
-        self._run(sql.SQL("CREATE SCHEMA IF NOT EXISTS {};").format(sql.Identifier(schema)))
-        self._run(sql.SQL("ALTER SCHEMA {} OWNER TO {};").format(sql.Identifier(schema), sql.Identifier(user)))
-
-        # 7. Grant privileges
-        self._run(sql.SQL("GRANT CONNECT ON DATABASE {} TO {};").format(sql.Identifier(database), sql.Identifier(user)))
-        self._run(sql.SQL("GRANT USAGE ON SCHEMA {} TO {};").format(sql.Identifier(schema), sql.Identifier(user)))
-        self._run(sql.SQL("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA {} TO {};")
-                .format(sql.Identifier(schema), sql.Identifier(user)))
-        self._run(sql.SQL("GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA {} TO {};")
-                .format(sql.Identifier(schema), sql.Identifier(user)))
-
-        # 8. Default privileges for future objects
-        self._run(sql.SQL("""
-            ALTER DEFAULT PRIVILEGES IN SCHEMA {}
-            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {};
-        """).format(sql.Identifier(schema), sql.Identifier(user)))
-        self._run(sql.SQL("""
-            ALTER DEFAULT PRIVILEGES IN SCHEMA {}
-            GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO {};
-        """).format(sql.Identifier(schema), sql.Identifier(user)))
-
-        # 9. Set search_path
-        self._run(sql.SQL("SET search_path TO {}, public;").format(sql.Identifier(schema)))
-        self.logger.info(f"DB setup complete: Database={database}, Schema={schema}, User={user} (IAM={iam_mode})")
-
-        return None
-        
 
     def create_table(self, table_name: str, column_definitions: list[str]):
         """
@@ -277,7 +333,9 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         """
 
         if self.conn is None:
-            self.connect_database(database=self.database, user=self.user, password=self.password)
+            self.connect_database(
+                database=self.database, user=self.user, password=self.password
+            )
 
         try:
             with self.conn.cursor() as cursor:
@@ -286,15 +344,21 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
                 create_table_sql = f"CREATE TABLE IF NOT EXISTS {full_table_name} ({', '.join(column_definitions)})"
                 cursor.execute(create_table_sql)
 
-                cursor.execute(f"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = %s AND table_name = %s)", 
-                            (self.schema, table_name))
-                table_exists = cursor.fetchone()[0] # type: ignore
+                cursor.execute(
+                    f"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = %s AND table_name = %s)",
+                    (self.schema, table_name),
+                )
+                table_exists = cursor.fetchone()[0]  # type: ignore
 
                 if table_exists:
-                    self.logger.info(f"Table '{self.schema}.{table_name}' successfully created or already exists.")
+                    self.logger.info(
+                        f"Table '{self.schema}.{table_name}' successfully created or already exists."
+                    )
                     self._commit()
                 else:
-                    self.logger.warning(f"Failed to create table '{self.schema}.{table_name}'.")
+                    self.logger.warning(
+                        f"Failed to create table '{self.schema}.{table_name}'."
+                    )
                     self._rollback()
 
         except Exception as e:
@@ -303,12 +367,13 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
 
         return None
 
-
-    def delete_data(self,
-                    FROM: str,
-                    WHERE: Union[str, list[str], tuple[str]],
-                    VALUES: Optional[Union[str, int, list, tuple]] = None,
-                    LIKE: Optional[Union[str, list[str], tuple[str]]] = None):
+    def delete_data(
+        self,
+        FROM: str,
+        WHERE: Union[str, list[str], tuple[str]],
+        VALUES: Optional[Union[str, int, list, tuple]] = None,
+        LIKE: Optional[Union[str, list[str], tuple[str]]] = None,
+    ):
         """
         Removes data from a PostgreSQL table under optional conditions.
 
@@ -328,22 +393,30 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         - Cascading is handled by the database schema via ``ON DELETE CASCADE`` constraints.
         """
         if self.conn is None:
-            self.connect_database(database=self.database, user=self.user, password=self.password)
+            self.connect_database(
+                database=self.database, user=self.user, password=self.password
+            )
 
         try:
             cursor = self.conn.cursor()
 
             if not WHERE:
-                self.logger.warning("Deleting the whole data without WHERE clause is not suppported. Consider using a joker LIKE query.")
+                self.logger.warning(
+                    "Deleting the whole data without WHERE clause is not suppported. Consider using a joker LIKE query."
+                )
                 return None
 
             where_cols = [WHERE] if isinstance(WHERE, str) else list(WHERE)
 
             # Exact match
             if VALUES is not None:
-                values = [VALUES] if not isinstance(VALUES, (list, tuple)) else list(VALUES)
+                values = (
+                    [VALUES] if not isinstance(VALUES, (list, tuple)) else list(VALUES)
+                )
                 if len(where_cols) != len(values):
-                    self.logger.warning("Number of WHERE columns must match number of VALUES.")
+                    self.logger.warning(
+                        "Number of WHERE columns must match number of VALUES."
+                    )
                     return None
 
                 where_clause = " AND ".join([f"{col} = %s" for col in where_cols])
@@ -355,7 +428,9 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             elif LIKE is not None:
                 patterns = [LIKE] if not isinstance(LIKE, (list, tuple)) else list(LIKE)
                 if len(where_cols) != len(patterns):
-                    self.logger.warning("Number of WHERE columns must match number of LIKE patterns.")
+                    self.logger.warning(
+                        "Number of WHERE columns must match number of LIKE patterns."
+                    )
                     return None
 
                 where_clause = " AND ".join([f"{col} LIKE %s" for col in where_cols])
@@ -363,17 +438,13 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
                 cursor.execute(query, tuple(patterns))
                 self.logger.debug(f"{query} -- {patterns}")
 
+            cursor.close()
             self._commit()
 
         except Exception as e:
             self.logger.error(f"PostgreSQL error when deleting data: {e}")
 
-        finally:
-            cursor.close()
-
         return None
-
-
 
     def disconnect_database(self):
         """
@@ -381,10 +452,11 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         """
         if self.conn:
             self.conn.close()
-            self.logger.info(f"Disconnected from database schema '{self.schema}'.")
+            self.logger.info(
+                f"Disconnected from database '{self.database}' schema '{self.schema}'."
+            )
 
         return None
-
 
     def drop_table(self, table_name: str):
         """
@@ -392,7 +464,9 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         """
 
         if self.conn is None:
-            self.connect_database(database=self.database, user=self.user, password=self.password)
+            self.connect_database(
+                database=self.database, user=self.user, password=self.password
+            )
 
         try:
             cursor = self.conn.cursor()
@@ -407,19 +481,22 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
 
         return None
 
-
     def drop_schema(self, schema: str):
         """
         Drops a schema from the PostgreSQL database.
         """
 
         if self.conn is None:
-            self.connect_database(database=self.database, user=self.user, password=self.password)
+            self.connect_database(
+                database=self.database, user=self.user, password=self.password
+            )
 
         try:
             cursor = self.conn.cursor()
             cursor.execute(
-                sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(sql.Identifier(schema))
+                sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(
+                    sql.Identifier(schema)
+                )
             )
             self._commit()
             cursor.close()
@@ -431,7 +508,6 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
 
         return None
 
-
     def drop_database(self, schema: str):
         """
         See ``drop_schema()``.
@@ -439,32 +515,34 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         self.logger.debug("Drop database not allowed. Drop schemas instead.")
         return self.drop_schema(schema=schema)
 
-
     def list_databases(self, display: bool = False):
         """
         Lists all databases on the server.
         """
 
         if self.conn is None:
-            self.connect_database(database=self.database, user=self.user, password=self.password)
+            self.connect_database(
+                database=self.database, user=self.user, password=self.password
+            )
 
         try:
 
             cursor = self.conn.cursor()
-            cursor.execute("SELECT datname FROM pg_database WHERE datistemplate = false;")
+            cursor.execute(
+                "SELECT datname FROM pg_database WHERE datistemplate = false;"
+            )
             databases_list = [db[0] for db in cursor.fetchall()]
 
             self.logger.debug("Available databases:", databases_list)
             if display:
                 print("Available databases:", databases_list)
-            
+
             cursor.close()
             return databases_list
-        
+
         except Exception as e:
             self.logger.error(f"PostgreSQL error when listing databases: {e}")
             return []
-
 
     def list_schemas(self, include_system_schemas: bool = False, display: bool = False):
         """
@@ -484,7 +562,9 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         """
 
         if self.conn is None:
-            self.connect_database(database=self.database, user=self.user, password=self.password)
+            self.connect_database(
+                database=self.database, user=self.user, password=self.password
+            )
 
         try:
             cursor = self.conn.cursor()
@@ -513,7 +593,6 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         except Exception as e:
             self.logger.info(f"PostgreSQL error when listing schemas: {e}")
             return []
-                
 
     def list_tables(self, display: bool = False):
         """
@@ -531,29 +610,37 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         """
 
         if self.conn is None:
-            self.connect_database(database=self.database, user=self.user, password=self.password)
+            self.connect_database(
+                database=self.database, user=self.user, password=self.password
+            )
 
         try:
 
             cursor = self.conn.cursor()
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT EXISTS(
                     SELECT 1 FROM information_schema.schemata WHERE schema_name = %s
                 );
-            """, (self.schema,))
-            schema_exists = cursor.fetchone()[0] # type: ignore
+            """,
+                (self.schema,),
+            )
+            schema_exists = cursor.fetchone()[0]  # type: ignore
 
             if not schema_exists:
                 self.logger.info(f"Schema '{self.schema}' does not exist.")
                 return []
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT table_name 
                 FROM information_schema.tables 
                 WHERE table_schema = %s
                 ORDER BY table_name;
-            """, (self.schema,))
+            """,
+                (self.schema,),
+            )
 
             tables_list = [row[0] for row in cursor.fetchall()]
 
@@ -571,14 +658,15 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             self.logger.error(f"PostgreSQL error when listing tables: {e}")
             return []
 
-
-    def query_data(self,
-                SELECT: str,
-                FROM: str,
-                JOIN: Optional[Union[str, list[str], tuple[str]]] = None,
-                WHERE: Optional[Union[str, list[str], tuple[str]]] = None,
-                VALUES: Optional[Union[Any, list[Any], tuple[Any]]] = None,
-                LIKE: Optional[Union[str, list[str], tuple[Any]]] = None):
+    def query_data(
+        self,
+        SELECT: str,
+        FROM: str,
+        JOIN: Optional[Union[str, list[str], tuple[str]]] = None,
+        WHERE: Optional[Union[str, list[str], tuple[str]]] = None,
+        VALUES: Optional[Union[Any, list[Any], tuple[Any]]] = None,
+        LIKE: Optional[Union[str, list[str], tuple[Any]]] = None,
+    ):
         """
         Selects data from a PostgreSQL table with optional JOIN and filtering.
 
@@ -604,7 +692,9 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         """
 
         if self.conn is None:
-            self.connect_database(database=self.database, user=self.user, password=self.password)
+            self.connect_database(
+                database=self.database, user=self.user, password=self.password
+            )
 
         try:
             cursor = self.conn.cursor(cursor_factory=DictCursor)
@@ -612,7 +702,9 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             sql_parts = [f"SELECT {SELECT}", f"FROM {FROM}"]
 
             if JOIN is not None:
-                joins = [f"JOIN {JOIN}"] if isinstance(JOIN, str) else list(f"JOIN {JOIN}")
+                joins = (
+                    [f"JOIN {JOIN}"] if isinstance(JOIN, str) else list(f"JOIN {JOIN}")
+                )
                 sql_parts.extend(joins)
 
             where_clause = ""
@@ -622,22 +714,26 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             if VALUES is not None:
                 where_cols = [WHERE] if isinstance(WHERE, str) else WHERE
                 values = [VALUES] if not isinstance(VALUES, (list, tuple)) else VALUES
-                if len(where_cols) != len(values): # type: ignore
-                    self.logger.warning("Number of WHERE columns must match number of VALUES.")
+                if len(where_cols) != len(values):  # type: ignore
+                    self.logger.warning(
+                        "Number of WHERE columns must match number of VALUES."
+                    )
                     cursor.close()
                     return []
-                where_clause = " AND ".join([f"{col} = %s" for col in where_cols]) # type: ignore
+                where_clause = " AND ".join([f"{col} = %s" for col in where_cols])  # type: ignore
                 params = values
 
             # If like value query
             elif LIKE is not None:
                 where_cols = [WHERE] if isinstance(WHERE, str) else WHERE
                 like_patterns = [LIKE] if not isinstance(LIKE, (list, tuple)) else LIKE
-                if len(where_cols) != len(like_patterns): # type: ignore
-                    self.logger.warning("Number of WHERE columns must match number of LIKE patterns.")
+                if len(where_cols) != len(like_patterns):  # type: ignore
+                    self.logger.warning(
+                        "Number of WHERE columns must match number of LIKE patterns."
+                    )
                     cursor.close()
                     return []
-                where_clause = " AND ".join([f"{col} LIKE %s" for col in where_cols]) # type: ignore
+                where_clause = " AND ".join([f"{col} LIKE %s" for col in where_cols])  # type: ignore
                 params = like_patterns
 
             if where_clause:
@@ -658,7 +754,6 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             self.logger.error(f"Unexpected error when selecting data: {e}")
             return []
 
-
     def send_data(self, table_name: str, **kwargs):
         """
         Inserts data into a PostgreSQL table. Infers column-value pairs from ``kwargs`` key-value pairs.
@@ -674,9 +769,11 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         --------
         >>> send_data(table_name="users", user_id=42, user_name="jdoe")
         """
-        
+
         if self.conn is None:
-            self.connect_database(database=self.database, user=self.user, password=self.password)
+            self.connect_database(
+                database=self.database, user=self.user, password=self.password
+            )
 
         try:
             cursor = self.conn.cursor()
@@ -684,28 +781,35 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             placeholders = ",".join(["%s"] * len(kwargs))
             values = tuple(kwargs.values())
 
-            cursor.execute(f"INSERT INTO {table_name} ({fields}) VALUES ({placeholders});", values)
+            cursor.execute(
+                f"INSERT INTO {table_name} ({fields}) VALUES ({placeholders});", values
+            )
             self.logger.debug(f"INSERT INTO {table_name} ({fields}) VALUES ({values});")
             self._commit()
 
         except AttributeError:
-            self.logger.error(f"Connection to the DB is not defined. Try reconnecting to the DB.")
+            self.logger.error(
+                f"Connection to the DB is not defined. Try reconnecting to the DB."
+            )
 
         except Exception as e:
-            self.logger.error(f"PostgreSQL error when inserting data into '{table_name}': {e}")
+            self.logger.error(
+                f"PostgreSQL error when inserting data into '{table_name}': {e}"
+            )
 
         finally:
             self._rollback()
 
         return None
 
-
-    def update_data(self,
-                    table_name: str,
-                    WHERE: Optional[Union[str, list[str], tuple[str]]] = None,
-                    VALUES: Optional[Union[Any, list[Any], tuple[Any]]] = None,
-                    LIKE: Optional[Union[str, list[str], tuple[str]]] = None,
-                    **kwargs):
+    def update_data(
+        self,
+        table_name: str,
+        WHERE: Optional[Union[str, list[str], tuple[str]]] = None,
+        VALUES: Optional[Union[Any, list[Any], tuple[Any]]] = None,
+        LIKE: Optional[Union[str, list[str], tuple[str]]] = None,
+        **kwargs,
+    ):
         """
         Updates data in a PostgreSQL table based on a WHERE clause.
 
@@ -724,7 +828,9 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         """
 
         if self.conn is None:
-            self.connect_database(database=self.database, user=self.user, password=self.password)
+            self.connect_database(
+                database=self.database, user=self.user, password=self.password
+            )
 
         try:
             cursor = self.conn.cursor()
@@ -741,19 +847,31 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
                 where_cols = [WHERE] if isinstance(WHERE, str) else list(WHERE)
 
                 if VALUES is not None:
-                    values = [VALUES] if not isinstance(VALUES, (list, tuple)) else list(VALUES)
+                    values = (
+                        [VALUES]
+                        if not isinstance(VALUES, (list, tuple))
+                        else list(VALUES)
+                    )
                     if len(where_cols) != len(values):
-                        self.logger.warning("Number of WHERE columns must match number of VALUES.")
+                        self.logger.warning(
+                            "Number of WHERE columns must match number of VALUES."
+                        )
                         return None
                     where_clause = " AND ".join([f"{col} = %s" for col in where_cols])
                     where_values = tuple(values)
 
                 elif LIKE is not None:
-                    patterns = [LIKE] if not isinstance(LIKE, (list, tuple)) else list(LIKE)
+                    patterns = (
+                        [LIKE] if not isinstance(LIKE, (list, tuple)) else list(LIKE)
+                    )
                     if len(where_cols) != len(patterns):
-                        self.logger.warning("Number of WHERE columns must match number of LIKE patterns.")
+                        self.logger.warning(
+                            "Number of WHERE columns must match number of LIKE patterns."
+                        )
                         return None
-                    where_clause = " AND ".join([f"{col} LIKE %s" for col in where_cols])
+                    where_clause = " AND ".join(
+                        [f"{col} LIKE %s" for col in where_cols]
+                    )
                     where_values = tuple(patterns)
 
             # Build final query
@@ -769,21 +887,26 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             self._commit()
 
         except AttributeError:
-            self.logger.error("Connection to the DB is not defined. Try reconnecting to the DB.")
+            self.logger.error(
+                "Connection to the DB is not defined. Try reconnecting to the DB."
+            )
 
         except Exception as e:
-            self.logger.error(f"PostgreSQL error when updating data in '{table_name}': {e}")
+            self.logger.error(
+                f"PostgreSQL error when updating data in '{table_name}': {e}"
+            )
 
         finally:
             self._rollback()
 
         return None
-    
 
     def raw_sql(self, SQL: str, VALUES: tuple[str]):
 
         if self.conn is None:
-            self.connect_database(database=self.database, user=self.user, password=self.password)
+            self.connect_database(
+                database=self.database, user=self.user, password=self.password
+            )
 
         try:
             self.logger.warning(f"Running raw SQL query: {SQL}")
@@ -791,11 +914,11 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             cursor.execute(SQL, VALUES)
             rows = cursor.fetchall()
             cursor.close()
+            return rows
+
         except Exception as e:
             self.logger.critical(f"SQL raw query failed:\n {e}")
-
-        return rows
-
+            return []
 
     def _commit(self):
         """
@@ -809,7 +932,6 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             self.logger.error("Failed to commit transaction.")
 
         return None
-    
 
     def _rollback(self):
         """
@@ -824,7 +946,6 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
 
         return None
 
-
     def execute_file(self, file_path: str):
         """
         Executes SQL commands from a .sql file or inserts data from a .json file.
@@ -836,49 +957,63 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         """
 
         if self.conn is None:
-            self.connect_database(database=self.database, user=self.user, password=self.password)
+            self.connect_database(
+                database=self.database, user=self.user, password=self.password
+            )
 
         if not os.path.isfile(file_path):
             self.logger.warning(f"File '{file_path}' does not exist.")
             return None
 
-
         try:
             cursor = self.conn.cursor()
 
             file_extension = os.path.splitext(file_path)[1]
-            if file_extension == '.sql':
-                with open(file_path, 'r', encoding='utf-8') as sql_file:
+            if file_extension == ".sql":
+                with open(file_path, "r", encoding="utf-8") as sql_file:
                     sql_commands = sql_file.read()
                     cursor.execute(sql_commands)
                     self.conn.commit()
                     self.logger.info(f"SQL file '{file_path}' executed successfully.")
 
-            elif file_extension == '.json':
-                with open(file_path, 'r', encoding='utf-8') as json_file:
+            elif file_extension == ".json":
+                with open(file_path, "r", encoding="utf-8") as json_file:
                     data = json.load(json_file)
 
                 if not isinstance(data, list):
-                    self.logger.warning("JSON file must contain a list of records (dictionaries).")
+                    self.logger.warning(
+                        "JSON file must contain a list of records (dictionaries)."
+                    )
                     return None
 
                 for record in data:
-                    if not isinstance(record, dict) or 'table' not in record or 'data' not in record:
-                        self.logger.warning("JSON format invalid. Each record must contain 'table' and 'data' keys.")
+                    if (
+                        not isinstance(record, dict)
+                        or "table" not in record
+                        or "data" not in record
+                    ):
+                        self.logger.warning(
+                            "JSON format invalid. Each record must contain 'table' and 'data' keys."
+                        )
                         return None
 
-                    table_name = record['table']
-                    fields = ', '.join(record['data'].keys())
-                    placeholders = ', '.join(['%s'] * len(record['data']))
-                    values = tuple(record['data'].values())
+                    table_name = record["table"]
+                    fields = ", ".join(record["data"].keys())
+                    placeholders = ", ".join(["%s"] * len(record["data"]))
+                    values = tuple(record["data"].values())
 
-                    cursor.execute(f"INSERT INTO {table_name} ({fields}) VALUES ({placeholders});", values)
+                    cursor.execute(
+                        f"INSERT INTO {table_name} ({fields}) VALUES ({placeholders});",
+                        values,
+                    )
 
                 self.conn.commit()
                 self.logger.info(f"JSON file '{file_path}' data inserted successfully.")
 
             else:
-                self.logger.warning(f"Unsupported file type '{file_extension}'. Only .sql and .json are supported.")
+                self.logger.warning(
+                    f"Unsupported file type '{file_extension}'. Only .sql and .json are supported."
+                )
 
         except psycopg2.Error as e:
             self.logger.error(f"PostgreSQL error when executing file: {e}")

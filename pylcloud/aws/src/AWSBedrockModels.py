@@ -14,15 +14,17 @@ class AWSBedrockModels(AWS):
     """
     AWS Bedrock general inference services helper.
     """
-    def __init__(self, 
-                 aws_access_key_id: str,
-                 aws_secret_access_key: str, 
-                 aws_region_name: str = 'eu-west-1',
-                 aws_session_token: str = str(uuid.uuid4())
-                 ) -> None:
+
+    def __init__(
+        self,
+        aws_access_key_id: str,
+        aws_secret_access_key: str,
+        aws_region_name: str = "eu-west-1",
+        aws_session_token: str = str(uuid.uuid4()),
+    ) -> None:
         """
-        Initiates a connection to the Bedrock service. 
-        
+        Initiates a connection to the Bedrock service.
+
         This is dedicated to fundation models inference. For RAG and knowledge bases, see ``AWSBedrockKnowledgeBase``.
 
         Parameters
@@ -53,59 +55,72 @@ class AWSBedrockModels(AWS):
         """
         super().__init__()
 
-        self.bedrock_client = self._create_client(aws_service_name="bedrock",
-                                                  aws_access_key_id=aws_access_key_id,
-                                                  aws_secret_access_key=aws_secret_access_key,
-                                                  aws_region_name=aws_region_name,)
-                                                  #aws_session_token=aws_session_token)
+        self.bedrock_client = self._create_client(
+            aws_service_name="bedrock",
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key,
+            aws_region_name=aws_region_name,
+        )
+        # aws_session_token=aws_session_token)
 
-        self.bedrock_runtime_client = self._create_client(aws_service_name="bedrock-runtime",
-                                                          aws_access_key_id=aws_access_key_id,
-                                                          aws_secret_access_key=aws_secret_access_key,
-                                                          aws_region_name=aws_region_name,)
-                                                         # aws_session_token=aws_session_token)
+        self.bedrock_runtime_client = self._create_client(
+            aws_service_name="bedrock-runtime",
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key,
+            aws_region_name=aws_region_name,
+        )
+        # aws_session_token=aws_session_token)
 
         self.available_models = {
-            'claude-3.5-sonnet': {
-                "model_id": 'eu.anthropic.claude-3-7-sonnet-20250219-v1:0' if aws_region_name.startswith("eu") else 'anthropic.claude-3-5-sonnet-20240620-v1:0',
-                "anthropic_version": "bedrock-2023-05-31"
-                },
-            'claude-3.7-sonnet': {
-                "model_id": 'eu.anthropic.claude-3-5-sonnet-20240620-v1:0' if aws_region_name.startswith("eu") else 'anthropic.claude-3-5-sonnet-20240620-v1:0', 
-                "anthropic_version": "bedrock-2023-05-31"
-                },
-            'clade-3-sonnet': {
-                "model_id": 'anthropic.claude-3-sonnet-20240229-v1:0', 
-                "anthropic_version": "bedrock-2023-05-31"
-                },
-            'claude-3-haiku': {
-                "model_id": 'anthropic.claude-3-haiku-20240307-v1:0', 
-                "anthropic_version": "bedrock-2023-05-31"
-                }
-            }
+            "claude-3.5-sonnet": {
+                "model_id": (
+                    "eu.anthropic.claude-3-7-sonnet-20250219-v1:0"
+                    if aws_region_name.startswith("eu")
+                    else "anthropic.claude-3-5-sonnet-20240620-v1:0"
+                ),
+                "anthropic_version": "bedrock-2023-05-31",
+            },
+            "claude-3.7-sonnet": {
+                "model_id": (
+                    "eu.anthropic.claude-3-5-sonnet-20240620-v1:0"
+                    if aws_region_name.startswith("eu")
+                    else "anthropic.claude-3-5-sonnet-20240620-v1:0"
+                ),
+                "anthropic_version": "bedrock-2023-05-31",
+            },
+            "clade-3-sonnet": {
+                "model_id": "anthropic.claude-3-sonnet-20240229-v1:0",
+                "anthropic_version": "bedrock-2023-05-31",
+            },
+            "claude-3-haiku": {
+                "model_id": "anthropic.claude-3-haiku-20240307-v1:0",
+                "anthropic_version": "bedrock-2023-05-31",
+            },
+        }
 
         return None
 
-
-    def return_query(self, 
-                     model_name: str, 
-                     user_prompt: str, 
-                     system_prompt: str = "", 
-                     files: List[Union[str, BytesIO]] = [], 
-                     max_tokens: int = 512,
-                     temperature: int = 1,
-                     top_k: int = 250,
-                     top_p: float = 0.999,
-                     display: bool = False):
+    def return_query(
+        self,
+        model_name: str,
+        user_prompt: str,
+        system_prompt: str = "",
+        files: List[Union[str, BytesIO]] = [],
+        max_tokens: int = 512,
+        temperature: int = 1,
+        top_k: int = 250,
+        top_p: float = 0.999,
+        display: bool = False,
+    ):
         """
         Function to interact with an AWS Bedrock model using boto3.
 
         Parameters
         ----------
         model_id: str
-            The ID of the model in AWS Bedrock to invoke. 
+            The ID of the model in AWS Bedrock to invoke.
             See ``list_fundation_models()`` for the exact ID name.
-        prompt_text: str 
+        prompt_text: str
             The input text to send to the model.
         display: bool, False
             Whereas to print in the terminal the model response, or not.
@@ -127,49 +142,53 @@ class AWSBedrockModels(AWS):
 
         model_id = self.available_models[model_name]["model_id"]
 
-        payload = self._create_payload(model_name=model_name,
-                                       user_prompt=user_prompt,
-                                       system_prompt=system_prompt,
-                                       files=files,
-                                       max_tokens=max_tokens)
-        
+        payload = self._create_payload(
+            model_name=model_name,
+            user_prompt=user_prompt,
+            system_prompt=system_prompt,
+            files=files,
+            max_tokens=max_tokens,
+        )
+
         response = self.bedrock_runtime_client.invoke_model(
             modelId=model_id,
-            accept='application/json',  
-            contentType='application/json',  
-            body=payload
+            accept="application/json",
+            contentType="application/json",
+            body=payload,
         )
-        
-        response_body = json.loads(response['body'].read())
+
+        response_body = json.loads(response["body"].read())
         text = response_body["content"][0]["text"]
         usage = response_body["usage"]
 
-        if display: print(text)
+        if display:
+            print(text)
 
         return {"text": text, "usage": usage}
-        
 
-    def yield_query(self, 
-                     model_name: str, 
-                     user_prompt: str, 
-                     system_prompt: str = "", 
-                     files: List[Union[str, BytesIO]] = [], 
-                     max_tokens: int = 512,
-                     temperature: int = 1,
-                     top_k: int = 250,
-                     top_p: float = 0.999,
-                     display: bool = False):
+    def yield_query(
+        self,
+        model_name: str,
+        user_prompt: str,
+        system_prompt: str = "",
+        files: List[Union[str, BytesIO]] = [],
+        max_tokens: int = 512,
+        temperature: int = 1,
+        top_k: int = 250,
+        top_p: float = 0.999,
+        display: bool = False,
+    ):
         """
         Function to interact with an AWS Bedrock model using boto3.
 
         Parameters
         ----------
         model_name: str
-            The human readable name of the model in AWS Bedrock to invoke. 
+            The human readable name of the model in AWS Bedrock to invoke.
             See ``list_models()`` for the exact ID name. See the note below for the models names.
-        user_prompt: str 
+        user_prompt: str
             The user's input text to send to the model.
-        system_prompt: str 
+        system_prompt: str
             The system text to send to the model.
         files: list[str|BytesIO], []
             The list of files to add to the payload. Can be local paths, binary files, or both. Supports only images.
@@ -191,50 +210,55 @@ class AWSBedrockModels(AWS):
             - 'claude-3-sonnet'
         """
 
-
         model_id = self.available_models[model_name]["model_id"]
 
-        payload = self._create_payload(model_name=model_name,
-                                       user_prompt=user_prompt,
-                                       system_prompt=system_prompt,
-                                       files=files,
-                                       temperature=temperature,
-                                       top_k=top_k,
-                                       top_p=top_p,
-                                       max_tokens=max_tokens)
-        
+        payload = self._create_payload(
+            model_name=model_name,
+            user_prompt=user_prompt,
+            system_prompt=system_prompt,
+            files=files,
+            temperature=temperature,
+            top_k=top_k,
+            top_p=top_p,
+            max_tokens=max_tokens,
+        )
+
         response = self.bedrock_runtime_client.invoke_model_with_response_stream(
             modelId=model_id,
-            accept='application/json',  
-            contentType='application/json',  
-            body=payload
+            accept="application/json",
+            contentType="application/json",
+            body=payload,
         )
-        
+
         text = ""
         for event in response["body"]:
             chunk = json.loads(event["chunk"]["bytes"])
             if chunk["type"] == "content_block_delta":
-                if display: print(chunk["delta"].get("text", ""), end="")
+                if display:
+                    print(chunk["delta"].get("text", ""), end="")
                 text += chunk["delta"].get("text", "")
                 yield chunk["delta"].get("text", "")
             elif chunk["type"] == "message_stop":
                 usage = {
-                    "input_tokens": chunk["amazon-bedrock-invocationMetrics"].get("inputTokenCount", ""),
-                    "output_tokens": chunk["amazon-bedrock-invocationMetrics"].get("outputTokenCount", ""),
+                    "input_tokens": chunk["amazon-bedrock-invocationMetrics"].get(
+                        "inputTokenCount", ""
+                    ),
+                    "output_tokens": chunk["amazon-bedrock-invocationMetrics"].get(
+                        "outputTokenCount", ""
+                    ),
                 }
                 yield {"text": text, "usage": usage}
-        
 
     def list_models(self, display: bool = False):
         """
         List the available Amazon Bedrock foundation models.
-        
+
         Parameters
         ----------
         display: bool, False
             Whereas to print in the terminal the model list, or not.
 
-        Returns 
+        Returns
         -------
         models_list: list[str]
             The list of available bedrock foundation models.
@@ -242,73 +266,65 @@ class AWSBedrockModels(AWS):
 
         response = self.bedrock_client.list_foundation_models()
         models_list = response["modelSummaries"]
-        if display: print(models_list)
+        if display:
+            print(models_list)
 
         return models_list
-    
 
-    def _create_payload(self, 
-                        model_name: str, 
-                        user_prompt: str, 
-                        system_prompt: str = "", 
-                        files: List[Union[str, BytesIO]] = [], 
-                        temperature: int = 1,
-                        top_k: int = 250,
-                        top_p: float = 0.999,
-                        max_tokens: int = 512):
+    def _create_payload(
+        self,
+        model_name: str,
+        user_prompt: str,
+        system_prompt: str = "",
+        files: List[Union[str, BytesIO]] = [],
+        temperature: int = 1,
+        top_k: int = 250,
+        top_p: float = 0.999,
+        max_tokens: int = 512,
+    ):
         """
         Formats a payload that respects the API models.
         """
 
         def _create_claude_payload():
-            
+
             content = [
                 {
                     "type": "image",
                     "source": {
                         "type": "base64",
                         "media_type": "image/jpeg",
-                        "data": file
-                    }
+                        "data": file,
+                    },
                 }
                 for file in self._process_files(files=files)
             ]
-            content.append(
-                {
-                    "type": "text",
-                    "text": user_prompt
-                }
-            )
+            content.append({"type": "text", "text": user_prompt})
             payload = {
-                "anthropic_version": self.available_models[model_name]["anthropic_version"], 
+                "anthropic_version": self.available_models[model_name][
+                    "anthropic_version"
+                ],
                 "max_tokens": max_tokens,
                 "stop_sequences": [],
                 "temperature": temperature,
                 "top_p": top_p,
                 "top_k": top_k,
                 "system": system_prompt,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": content
-                    }
-                ]
+                "messages": [{"role": "user", "content": content}],
             }
 
-            return payload 
-        
+            return payload
+
         def _create_mistral_payload():
 
             payload = {}
 
-            return payload 
-        
+            return payload
 
         if model_name.startswith("claude"):
             return json.dumps(_create_claude_payload())
         elif model_name.startswith("mistral"):
             return json.dumps(_create_mistral_payload())
-
 
     def _process_files(self, files: List[Union[str, BytesIO]] = []) -> List[str]:
         """
@@ -318,7 +334,9 @@ class AWSBedrockModels(AWS):
         if isinstance(files, str):
             files = [files]
         if not isinstance(files, list):
-            print(f"AWSBedrockModels >> Invalid file input, should be ``list``, got ``{type(files)}``.")
+            print(
+                f"AWSBedrockModels >> Invalid file input, should be ``list``, got ``{type(files)}``."
+            )
             return []
 
         processed_files = []
@@ -333,7 +351,10 @@ class AWSBedrockModels(AWS):
             elif isinstance(file, BytesIO):
                 processed_files.append(file)
             else:
-                print(f"AWSBedrockModels >> Invalid file type in payload, must be ``str`` or ``BytesIO``, got ``{type(file)}``.")
+                print(
+                    f"AWSBedrockModels >> Invalid file type in payload, must be ``str`` or ``BytesIO``, got ``{type(file)}``."
+                )
 
-        return [base64.b64encode(file.getvalue()).decode('utf8') for file in processed_files]
-
+        return [
+            base64.b64encode(file.getvalue()).decode("utf8") for file in processed_files
+        ]

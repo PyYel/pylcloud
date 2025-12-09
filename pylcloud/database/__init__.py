@@ -1,7 +1,3 @@
-
-
-from .src.Database import Database
-
 from .src.search.DatabaseSearchElasticsearch import DatabaseSearchElasticsearch
 from .src.search.DatabaseSearchOpensearch import DatabaseSearchOpensearch
 

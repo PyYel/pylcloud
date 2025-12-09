@@ -11,5 +11,9 @@ db = DatabaseRelationalMySQL(host="10.24.160.80", database_name="datahive")
 print(db.list_databases(system_db=True))
 print(db.list_tables())
 print(db.query_data(SELECT="dataset_name", FROM="datasets"))
-print(db.query_data(SELECT="*", FROM="datapoints", WHERE="dataset_name", VALUES=('Audio dataset',)))
+print(
+    db.query_data(
+        SELECT="*", FROM="datapoints", WHERE="dataset_name", VALUES=("Audio dataset",)
+    )
+)
 print(len(db.query_data(SELECT="*", FROM="datapoints")))

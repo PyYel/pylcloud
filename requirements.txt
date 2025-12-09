@@ -7,6 +7,7 @@ uvicorn
 psycopg2
 opensearch-py 
 requests-aws4auth
+nltk
 
 # For testing
 python-dotenv==1.0.1

@@ -3,7 +3,7 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "PyYel-CloudOps"
+name = "pylcloud"
 version = "0.1.0"
 description = "Deployment tools"
 readme = "README.md"
@@ -12,22 +12,27 @@ authors = [
     { name="Maxime BLIDI", email="blidi.maxime@gmail.com" }
 ]
 dependencies = [
-    "boto3",
-    "mysql-connector-python",
     "tqdm",
-    "elasticsearch",
-    "fastapi",
-    "uvicorn",
-    "psycopg2",
-    "opensearch-py" ,
-    "requests-aws4auth",
-
-    # For testing
     "python-dotenv==1.0.1",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
+]
+
+[project.optional-dependencies]
+all = ["pylcloud[database,storage,gpt]"]
+database = [
+    "mysql-connector-python", 
+    "psycopg2",
+    "boto3", 
+    "elasticsearch", 
+    "opensearch-py"
+]
+storage = ["boto3"]
+gpt = [
+    "nltk", 
+    "requests",
 ]
 
 [tool.setuptools.packages.find]

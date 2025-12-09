@@ -6,7 +6,9 @@ import urllib3
 import warnings
 
 # Removes unverified HTTPS SSL traffic warnings
-warnings.filterwarnings('ignore', 'Connecting to .+ using TLS with verify_certs=False is insecure')
+warnings.filterwarnings(
+    "ignore", "Connecting to .+ using TLS with verify_certs=False is insecure"
+)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 from .DatabaseSearch import DatabaseSearch
@@ -16,7 +18,13 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
     """
     Elasticsearch Python API helper.
     """
-    def __init__(self, host: str = "https://localhost:9200", user: str = "admin", password: str = "password"):
+
+    def __init__(
+        self,
+        host: str = "https://localhost:9200",
+        user: str = "admin",
+        password: str = "password",
+    ):
         """
         Initializes a connection to an Elasticsearch cluster.
 
@@ -35,7 +43,7 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
             - A cluster is a database or schema.
             - An index is a table (similar to a MongoDB collection).
             - Documents are records.
-            - Fields are similar to columns (although they may be nested). 
+            - Fields are similar to columns (although they may be nested).
         - Similarly to a MySQL server, the PyYel library flattens the connection layers. This means, when connecting
         to an Elasticsearch DB, you are directly connected to the cluster. To change of cluster, you should 'reconnect' to the server.
         In the Elasticsearch context, this is more obvious, as two clusters must always be hosted on different ports.
@@ -59,29 +67,28 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
 
         return None
 
-
-    def connect_database(self, 
-                         host: str = "127.0.0.1",
-                         user: str = "user",
-                         password: str = "password"):
+    def connect_database(
+        self, host: str = "127.0.0.1", user: str = "user", password: str = "password"
+    ):
         """
-        Connects to the database and creates a connector object ``conn``. 
+        Connects to the database and creates a connector object ``conn``.
         """
         self.es = Elasticsearch(host, basic_auth=(user, password), verify_certs=False)
         return self.es
-    
 
     def create_table(self, *args, **kwargs):
         """See ``create_index()``."""
         self.logger.warning("Tables do not exist in NoSQL. Create an index instead.")
         return self.create_index(*args, **kwargs)
 
-    def create_index(self, 
-                     index_name: str, 
-                     properties: Optional[dict[str, str]] = None, 
-                     mapping_file: Optional[str] = None,
-                     shards: int = 1, 
-                     replicas: int = 1):
+    def create_index(
+        self,
+        index_name: str,
+        properties: Optional[dict[str, str]] = None,
+        mapping_file: Optional[str] = None,
+        shards: int = 1,
+        replicas: int = 1,
+    ):
         """
         Creates an index, with either inline properties or from a JSON mapping file.
 
@@ -97,19 +104,21 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
             Number of shards.
         replicas: int, default 1
             Number of replicas.
-        
+
         Notes
         -----
         If both 'properties' and 'mapping_file' are provided, the JSON file will be used.
         """
 
-        if ' ' in index_name:
-            self.logger.info(f"Index name can't contain blank spaces. Index name changed to '{index_name.replace(' ', '-')}'.")
-            index_name = index_name.replace(' ', '-')
+        if " " in index_name:
+            self.logger.info(
+                f"Index name can't contain blank spaces. Index name changed to '{index_name.replace(' ', '-')}'."
+            )
+            index_name = index_name.replace(" ", "-")
 
         if mapping_file:
             try:
-                with open(mapping_file, 'r') as f:
+                with open(mapping_file, "r") as f:
                     settings = json.load(f)
                 self.logger.info(f"Mapping loaded from '{mapping_file}'.")
             except Exception as e:
@@ -117,7 +126,9 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
                 return None
         else:
             if not properties:
-                self.logger.error("You must provide either 'properties' or a valid 'mapping_file'.")
+                self.logger.error(
+                    "You must provide either 'properties' or a valid 'mapping_file'."
+                )
                 return None
 
             settings = {
@@ -125,9 +136,7 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
                     "number_of_shards": shards,
                     "number_of_replicas": replicas,
                 },
-                "mappings": {
-                    "properties": properties
-                },
+                "mappings": {"properties": properties},
             }
 
         if not self.es.indices.exists(index=index_name):
@@ -136,27 +145,26 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
         else:
             self.logger.info(f"Index '{index_name}' already exists.")
 
-    
     def disconnect_database(self):
         """
         Closes the database linked to the connector ``conn``.
         """
         pass
 
-    
     def drop_database(self, database_name: str):
         """
         Drops all the indexes from a cluster.
         """
-        self.logger.warning("Can't drop an Elasticsearch. Will drop all the indexes from this cluster instead.")
+        self.logger.warning(
+            "Can't drop an Elasticsearch. Will drop all the indexes from this cluster instead."
+        )
         raise NotImplementedError
-
 
     def drop_table(self, *args, **kwargs):
         """See ``drop_index()``."""
         self.logger.warning("Use drop index instead.")
         return self.drop_index(*args, **kwargs)
-    
+
     def drop_index(self, index_name: str):
         """
         Deletes an index and all its content.
@@ -166,10 +174,9 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
             self.logger.info(f"Index '{index_name}' deleted successfully.")
         except Exception as e:
             self.logger.error(f"Failed to delete index '{index_name}': {e}")
-        
+
         return None
 
-    
     def delete_data(self, index_name: str, pairs: dict[str, str] = {}):
         """
         Deletes all the records from an index that match the ``pairs`` conditions.
@@ -186,7 +193,7 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
             query = {"query": {"match_all": pairs}}
         else:
             query = {"query": {"match": pairs}}
-        
+
         try:
             response = self.es.delete_by_query(index=index_name, body=query)
             self.logger.debug(response)
@@ -195,12 +202,11 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
 
         return None
 
-
     def list_databases(self, *args, **kwargs):
         """See ``list_clusters()``."""
         self.logger.warning("Use list clusters instead.")
         return self.list_clusters(*args, **kwargs)
-    
+
     def list_clusters(self):
         """
         List the databases (clusters) present on an Elasticsearch DB server.
@@ -208,7 +214,6 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
         info = self.es.info()
         self.logger.info(f"Cluster info: {info}")
         return info
-    
 
     def list_tables(self, *args, **kwargs):
         """See ``list_indexes()``."""
@@ -230,16 +235,17 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
         """
         if system_db:
             # built-in system indexes start with a dot
-            indexes = [index['index'] for index in self.es.cat.indices(format='json')] # type: ignore
+            indexes = [index["index"] for index in self.es.cat.indices(format="json")]  # type: ignore
             self.logger.info(f"Found indexes: {', '.join(indexes)}")
             return indexes
         else:
-            indexes = [index['index'] for index in self.es.cat.indices(format='json') if not index['index'].startswith(".")] # type: ignore
+            indexes = [index["index"] for index in self.es.cat.indices(format="json") if not index["index"].startswith(".")]  # type: ignore
             self.logger.info(f"Found indexes: {', '.join(indexes)}")
             return indexes
-        
 
-    def send_data(self, index_name: str, documents: list[dict], _ids: Optional[list[str]] = None):
+    def send_data(
+        self, index_name: str, documents: list[dict], _ids: Optional[list[str]] = None
+    ):
         """
         Sends data to the Elasticsearch index. Can handle single files, multiple files, and directories.
 
@@ -250,21 +256,22 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
         documents: list[dict]
             The payload to inject into the index.
         _ids: list[str], None
-            Overwrites auto-generated _id fileds for custom indexing. 
+            Overwrites auto-generated _id fileds for custom indexing.
 
         Notes
         -----
         - For a file_path of format ``path/to/file.ext``, the preprocessed data should be inside ``path/to/file`` eponymous folder/
         """
-        if _ids is None: _ids = [None] * len(documents) # type: ignore
+        if _ids is None:
+            _ids = [None] * len(documents)  # type: ignore
 
         actions = [
             {
-                "_index": index_name,                           # Target indexes
-                "_id": _id,   # Hashed id for log unicity
-                "_source": document                             # Document content
+                "_index": index_name,  # Target indexes
+                "_id": _id,  # Hashed id for log unicity
+                "_source": document,  # Document content
             }
-            for document, _id in zip(documents, _ids) # type: ignore
+            for document, _id in zip(documents, _ids)  # type: ignore
         ]
 
         self.logger.info(f"Sending {len(actions)} documents into index '{index_name}'.")
@@ -274,16 +281,16 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
             self.logger.error(f"Interface error when sending documents: {response}")
 
         return None
-    
 
     def update_data(self, *args, **kwargs):
         return super().update_data(*args, **kwargs)
 
-
-    def query_data(self, 
-                   index_name: str, 
-                   must_pairs: list[dict[str, str]] = [], 
-                   should_pairs: list[dict[str, str]] = []):
+    def query_data(
+        self,
+        index_name: str,
+        must_pairs: list[dict[str, str]] = [],
+        should_pairs: list[dict[str, str]] = [],
+    ):
         """
         Retrieves data from the Elasticsearch DB.
 
@@ -300,7 +307,7 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
         -------
         documents: list[dict[str]]
             The list of fetched document, as dictionnaries nested with the same structure as the one found in Elasticsearch.
-        
+
         Notes
         -----
         - When performing full text search, field keys must be specified as 'keyword': [{'my_text_field.keyword': 'value'}].
@@ -308,16 +315,16 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
         Examples
         --------
         >>> index_name = "workspaces"
-        >>> should_pairs = [{'flat_field': 'at_least_one_must_match_this'}, ...] 
-        >>> must_pairs = [{'nested_field.key_1': 'all_must_match_this'}, ...] 
+        >>> should_pairs = [{'flat_field': 'at_least_one_must_match_this'}, ...]
+        >>> must_pairs = [{'nested_field.key_1': 'all_must_match_this'}, ...]
         # When calling the method, it will return a list of documents with the following structure:
         >>> retreive_from_elastic(...)
         >>> [
                 {
-                    '_index': '...', 
-                    '_id':'...', 
+                    '_index': '...',
+                    '_id':'...',
                     '@timestamp': '...',
-                    '_source': { 
+                    '_source': {
                         flat_field: '...',
                         nested_field: {
                             key_1: '...',
@@ -343,7 +350,7 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
                     "must": must_conditions,
                     "should": should_conditions,
                     # At least 1 should condition must be matched. When there is no should condition input, the minimum must be set to zero
-                    "minimum_should_match": 1 if should_conditions else 0
+                    "minimum_should_match": 1 if should_conditions else 0,
                 }
             }
         }
@@ -352,7 +359,9 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
         try:
             for doc in helpers.scan(self.es, index=index_name, query=query, size=1000):
                 documents.append(doc)
-            self.logger.debug(f"Field search found {len(documents)} matching documents.")
+            self.logger.debug(
+                f"Field search found {len(documents)} matching documents."
+            )
         except NotFoundError as e:
             self.logger.error(f"Index '{e.info['error']['index']}' not found.")
             return []
@@ -362,19 +371,20 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
 
         return documents
 
-
-    def similarity_search(self, index_name: str, 
-                          query_vector: list[float] = None,
-                          query_text: str = None,
-                          must_pairs: list[dict[str, str]] = [], 
-                          should_pairs: list[dict[str, str]] = [],
-                          vector_field: str = "chunk_vector",
-                          text_field: str = "chunk_content",
-                          vector_weight: float = 0.7,
-                          text_weight: float = 0.3,
-                          initial_k: int = 20,
-                          final_k: int = 5
-                          ) -> list[dict[str, Any]]:
+    def similarity_search(
+        self,
+        index_name: str,
+        query_vector: list[float] = None,
+        query_text: str = None,
+        must_pairs: list[dict[str, str]] = [],
+        should_pairs: list[dict[str, str]] = [],
+        vector_field: str = "chunk_vector",
+        text_field: str = "chunk_content",
+        vector_weight: float = 0.7,
+        text_weight: float = 0.3,
+        initial_k: int = 20,
+        final_k: int = 5,
+    ) -> list[dict[str, Any]]:
         """
         Performs hybrid search in Elasticsearch combining vector similarity and text matching.
 
@@ -414,11 +424,15 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
             self.logger.error(error_msg)
             raise ValueError(error_msg)
 
-        if final_k > initial_k: 
+        if final_k > initial_k:
             final_k = initial_k
-            self.logger.warning("Hybrid search 'final_k' should be smaller than 'initial_k'.")
+            self.logger.warning(
+                "Hybrid search 'final_k' should be smaller than 'initial_k'."
+            )
 
-        self.logger.debug(f"Starting hybrid search on index '{index_name}' with k={initial_k}")
+        self.logger.debug(
+            f"Starting hybrid search on index '{index_name}' with k={initial_k}"
+        )
 
         # Build must conditions
         must_conditions = []
@@ -439,33 +453,41 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
                     "should": should_conditions,
                     "minimum_should_match": 1 if should_conditions else 0,
                 }
-            }
+            },
         }
 
         # Add vector search if query_vector is provided
         if query_vector is not None:
-            if not isinstance(query_vector, list) or not all(isinstance(x, (int, float)) for x in query_vector):
-                self.logger.error("Similarity search 'query_vector' must be a list of numbers.")
+            if not isinstance(query_vector, list) or not all(
+                isinstance(x, (int, float)) for x in query_vector
+            ):
+                self.logger.error(
+                    "Similarity search 'query_vector' must be a list of numbers."
+                )
                 return []
 
-            self.logger.debug(f"Adding vector search component with weight {vector_weight}")
+            self.logger.debug(
+                f"Adding vector search component with weight {vector_weight}"
+            )
 
             # Add kNN query with weight
             if "should" not in query["query"]["bool"]:
                 query["query"]["bool"]["should"] = []
 
-            query["query"]["bool"]["should"].append({
-                "script_score": {
-                    "query": {"match_all": {}},
-                    "script": {
-                        "source": f"knn_score({vector_field}, params.query_vector) * params.weight",
-                        "params": {
-                            "query_vector": query_vector,
-                            "weight": vector_weight
-                        }
+            query["query"]["bool"]["should"].append(
+                {
+                    "script_score": {
+                        "query": {"match_all": {}},
+                        "script": {
+                            "source": f"knn_score({vector_field}, params.query_vector) * params.weight",
+                            "params": {
+                                "query_vector": query_vector,
+                                "weight": vector_weight,
+                            },
+                        },
                     }
                 }
-            })
+            )
 
         # Add text search if query_text is provided
         if query_text is not None:
@@ -480,24 +502,21 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
             if "should" not in query["query"]["bool"]:
                 query["query"]["bool"]["should"] = []
 
-            query["query"]["bool"]["should"].append({
-                "script_score": {
-                    "query": {
-                        "match": {
-                            text_field: {
-                                "query": query_text,
-                                "fuzziness": "AUTO"
+            query["query"]["bool"]["should"].append(
+                {
+                    "script_score": {
+                        "query": {
+                            "match": {
+                                text_field: {"query": query_text, "fuzziness": "AUTO"}
                             }
-                        }
-                    },
-                    "script": {
-                        "source": f"_score * params.weight",
-                        "params": {
-                            "weight": text_weight
-                        }
+                        },
+                        "script": {
+                            "source": f"_score * params.weight",
+                            "params": {"weight": text_weight},
+                        },
                     }
                 }
-            })
+            )
 
         # Ensure we match something if both vector and text components are used
         if query_vector is not None and query_text is not None:
@@ -506,10 +525,12 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
         try:
             self.logger.debug(f"Executing hybrid search query: {query}")
             response = self.es.search(index=index_name, body=query)
-            documents = [hit for hit in response['hits']['hits']]
-            self.logger.info(f"Hybrid similarity search found {len(documents)} matching documents, returning top {final_k} scorers.")
+            documents = [hit for hit in response["hits"]["hits"]]
+            self.logger.info(
+                f"Hybrid similarity search found {len(documents)} matching documents, returning top {final_k} scorers."
+            )
             return documents[:final_k]
-        
+
         except ConnectionError as e:
             self.logger.error(f"Connection error during search: {str(e)}")
             return []
@@ -520,16 +541,16 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
             self.logger.error(f"Index '{index_name}' not found: {str(e)}")
             return []
         except Exception as e:
-            self.logger.error(f"Unexpected error during hybrid similarity search: {str(e)}")
+            self.logger.error(
+                f"Unexpected error during hybrid similarity search: {str(e)}"
+            )
             return []
-
 
     def _commit(self):
         """
         Commits the transactions operated since the last commit.
         """
         raise NotImplementedError
-
 
     def _rollback(self):
         """

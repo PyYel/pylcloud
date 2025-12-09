@@ -5,12 +5,14 @@ from typing import Optional
 from datetime import datetime
 from abc import ABC, abstractmethod
 
-from database import Database
+from ..Database import Database
+
 
 class DatabaseGraph(Database):
     """
     Databases API helper.
     """
+
     def __init__(self, logs_name: str):
         """
         Initializes the helper and its logging.
