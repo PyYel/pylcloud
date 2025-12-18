@@ -6,6 +6,8 @@ from pathlib import Path
 import mimetypes
 
 
+from pylcloud import _config_logger
+
 class Storage(ABC):
     """
     Inetrnal storage services helper.
@@ -17,6 +19,12 @@ class Storage(ABC):
         """
         super().__init__()
 
+        # Default logger fallback
+        self.logger = _config_logger(
+            logs_name="Storage",
+            logs_output=["console"],
+        )
+        
         self.bucket_name = bucket_name
 
         if (tmp_dir is None) or not os.path.exists(tmp_dir):

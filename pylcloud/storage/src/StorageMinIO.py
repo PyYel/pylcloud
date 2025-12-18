@@ -131,3 +131,6 @@ class StorageMinIO(Storage):
 
     def upload_directory(self, path: str):
         raise NotImplementedError
+
+    def download_directory(self, key: str, path: str | None = None) -> None:
+        return super().download_directory(key, path)

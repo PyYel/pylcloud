@@ -1,4 +1,4 @@
-from typing import Union, Optional
+from typing import Union, Optional, List, Dict
 import os
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -6,7 +6,7 @@ import boto3
 import mimetypes
 
 from .Storage import Storage
-
+from pylcloud import _config_logger
 
 class StorageS3(Storage):
     """
@@ -52,6 +52,8 @@ class StorageS3(Storage):
         >>> bucket_api = StorageS3(KEY_ID, KEY, 'eu-west-1', 'my_bucket_name', 'C:/Users/Me/myapp/output_folder')
         """
         super().__init__(bucket_name=bucket_name, tmp_dir=tmp_dir)
+
+        self.logger = _config_logger(logs_name="Storage")
 
         self.s3_client = boto3.client(
             service_name="s3",
@@ -260,7 +262,7 @@ class StorageS3(Storage):
                 f"StorageS3 >> Error downloading {len(failed_files)} files. See error above."
             )
 
-        return failed_files
+        return None
 
     def list_files(self, prefix: str = ""):
         """
@@ -488,3 +490,65 @@ class StorageS3(Storage):
         print(f"StorageS3 >> Directory upload complete")
 
         return None
+
+
+    def upload_urls(
+        self, keys: Union[str, list[str]], content_types: Optional[List] = None
+    ) -> list[str]:
+        """
+        Requests list of presigned URL for direct file upload.
+        """
+
+        if isinstance(keys, str):
+            keys = [keys]
+
+        try:
+
+            if content_types is None:
+                content_types = ["application/octet-stream"] * len(keys)
+
+            urls = [
+                self.s3_client.generate_presigned_url(
+                    ClientMethod="put_object",
+                    Params={
+                        "Bucket": self.bucket_name,
+                        "Key": key,
+                        "ContentType": content_type,
+                    },
+                    ExpiresIn=3600,
+                )
+                for key, content_type in zip(keys, content_types)
+            ]
+
+            return urls
+
+        except Exception as e:
+            print(f"StorageS3 >> Error generating presigned urls: {str(e)}")
+            return []
+
+    def download_urls(self, keys: Union[str, List[str]]) -> List[str]:
+        """
+        Generate presigned URLs for downloading files from a private S3 bucket.
+        """
+
+        if isinstance(keys, str):
+            keys = [keys]
+
+        try:
+            urls = [
+                self.s3_client.generate_presigned_url(
+                    ClientMethod="get_object",
+                    Params={
+                        "Bucket": self.bucket_name,
+                        "Key": key,
+                    },
+                    ExpiresIn=3600,
+                )
+                for key in keys
+            ]
+
+            return urls
+
+        except Exception as e:
+            print(f"StorageS3 >> Error generating presigned urls: {str(e)}")
+            return []
