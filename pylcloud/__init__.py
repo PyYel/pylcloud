@@ -32,6 +32,11 @@ def _config_logger(
         The output method, whereas printing to console, file, or both.
     """
 
+    def _create_logs_dir(logs_dir: str):
+        os.makedirs(logs_dir, exist_ok=True)
+        with open(os.path.join(os.path.dirname(logs_dir), ".gitignore"), "w") as f:
+            f.write("*\n!.gitignore")
+
     # Must be a valid log level alias
     if logs_level not in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:
         logs_level = "INFO"
@@ -43,8 +48,9 @@ def _config_logger(
         )
     else:
         logs_dir = os.path.join(logs_dir, str(datetime.now().strftime("%Y-%m-%d")))
-
-    os.makedirs(logs_dir, exist_ok=True)
+    
+    if "file" in logs_output:
+        _create_logs_dir(logs_dir=logs_dir)
 
     logger = logging.getLogger(logs_name)
     logger.setLevel(logging.DEBUG)
