@@ -94,8 +94,20 @@ class DatabaseRelationalMySQL(DatabaseRelational):
     def connect_database(self, *args, **kwargs):
         return super().connect_database(*args, **kwargs)
 
+    def disconnect_database(self, *args, **kwargs):
+        return super().disconnect_database(*args, **kwargs)
+
     def describe_database(self, *args, **kwargs):
         return super().describe_database(*args, **kwargs)
+
+    def create_table(self, *args, **kwargs):
+        return super().create_table(*args, **kwargs)
+
+    def drop_table(self, *args, **kwargs):
+        return super().drop_table(*args, **kwargs)
+
+    def list_tables(self, *args, **kwargs):
+        return super().list_tables(*args, **kwargs)
 
     def query_data(self, *args, **kwargs):
         return super().query_data(*args, **kwargs)
@@ -108,3 +120,9 @@ class DatabaseRelationalMySQL(DatabaseRelational):
 
     def update_data(self, *args, **kwargs):
         return super().update_data(*args, **kwargs)
+
+    def _commit(self):
+        return super()._commit()
+
+    def _rollback(self):
+        return super()._rollback()

@@ -28,7 +28,7 @@ class DatabaseRelationalSQLite(DatabaseRelational):
 
         self.database_path = database_path
         try:
-            self.conn = self.connect_database(database_path=self.database_path)
+            self.conn: sqlite3.Connection = self.connect_database(database_path=self.database_path)  # type: ignore
         except Exception as e:
             self.logger.info(
                 f"An error occured when connecting to '{os.path.basename(database_path)}': {e}"
@@ -143,7 +143,7 @@ class DatabaseRelationalSQLite(DatabaseRelational):
 
         return None
 
-    def describe(self):
+    def describe_database(self):
         """ """
         print(self.list_tables())
         return None
@@ -262,3 +262,12 @@ class DatabaseRelationalSQLite(DatabaseRelational):
             )
 
         return None
+
+    def update_data(self, *args, **kwargs):
+        return super().update_data(*args, **kwargs)
+
+    def _commit(self):
+        return super()._commit()
+
+    def _rollback(self):
+        return super()._rollback()

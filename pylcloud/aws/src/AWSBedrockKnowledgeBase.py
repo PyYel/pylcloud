@@ -13,10 +13,10 @@ class AWSBedrockKnowledgeBase(AWS):
 
     def __init__(
         self,
-        aws_access_key_id: str,
-        aws_secret_access_key: str,
+        aws_access_key_id: str = "",
+        aws_secret_access_key: str = "",
         aws_region_name: str = "us-east-1",
-        aws_session_token: str = uuid.uuid4(),
+        aws_session_token: str = str(uuid.uuid4()),
     ) -> None:
         """
         Initiates a connection to the Bedrock Knowledge Base related services.
@@ -106,7 +106,9 @@ class AWSBedrockKnowledgeBase(AWS):
 
         knowledge_bases = []
 
-        paginator = self.client.get_paginator("list_agent_knowledge_bases")
+        paginator = self.bedrock_agent_client.get_paginator(
+            "list_agent_knowledge_bases"
+        )
         for page in paginator.paginate(
             agentId=agent_id,
             agentVersion=agent_version,

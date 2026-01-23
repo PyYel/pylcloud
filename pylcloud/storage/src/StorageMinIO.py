@@ -4,6 +4,7 @@ import boto3
 from concurrent.futures import ThreadPoolExecutor
 
 from .Storage import Storage
+from pylcloud import _config_logger
 
 
 class StorageMinIO(Storage):
@@ -23,6 +24,8 @@ class StorageMinIO(Storage):
         MinIO helper
         """
         super().__init__(bucket_name=bucket_name)
+
+        self.logger = _config_logger(logs_name="StorageMinIO")
 
         self.s3_client = boto3.client(
             service_name="s3",

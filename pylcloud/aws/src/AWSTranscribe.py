@@ -1,7 +1,7 @@
 import os, sys
-
 import requests
 import time
+from typing import Optional
 
 from .AWS import AWS
 
@@ -13,9 +13,9 @@ class AWSTranscribe(AWS):
 
     def __init__(
         self,
-        aws_access_key_id: str,
-        aws_secret_access_key: str,
-        bucket_name=str,
+        aws_access_key_id: str = "",
+        aws_secret_access_key: str = "",
+        bucket_name: str = "",
         aws_region_name: str = "us-west-1",
     ):
         """
@@ -57,7 +57,7 @@ class AWSTranscribe(AWS):
 
         return None
 
-    def _map_language(self, language: str = None):
+    def _map_language(self, language: Optional[str] = None):
         """
         Maps a language into its AWS code. See supported languages below.
 
@@ -86,7 +86,7 @@ class AWSTranscribe(AWS):
                 )
                 return "en-US"
 
-    def transcribe(self, key: str, language: str = None):
+    def transcribe(self, key: str, language: Optional[str] = None):
         """
         Calls an AWS Transcribe job to transcribe a mp3 file located on a S3 bucket.
         # TODO: thread the function

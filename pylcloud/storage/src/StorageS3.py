@@ -4,9 +4,11 @@ from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import boto3
 import mimetypes
+import tempfile
 
 from .Storage import Storage
 from pylcloud import _config_logger
+
 
 class StorageS3(Storage):
     """
@@ -15,11 +17,10 @@ class StorageS3(Storage):
 
     def __init__(
         self,
-        bucket_name: str,
-        aws_access_key_id: str,
-        aws_secret_access_key: str,
+        bucket_name: str = "",
+        aws_access_key_id: str = "",
+        aws_secret_access_key: str = "",
         aws_region_name: str = "eu-west-1",
-        tmp_dir: Optional[str] = None,
     ) -> None:
         """
         Initiates a connection to a given S3 bucket.
@@ -34,10 +35,6 @@ class StorageS3(Storage):
             The AWS ressources region name.
         bucket_name: str
             The name of the bucket to fetch and send data to.
-        tmp_dir: str, '~/tmp'
-            The ``/tmp`` folder is used as a default folder to read and write data locally. It
-            can be considered as a default input/output folder. If None, ``/tmp`` folder will
-            be created in the current working directory.
 
         Notes
         -----
@@ -51,9 +48,9 @@ class StorageS3(Storage):
         -------
         >>> bucket_api = StorageS3(KEY_ID, KEY, 'eu-west-1', 'my_bucket_name', 'C:/Users/Me/myapp/output_folder')
         """
-        super().__init__(bucket_name=bucket_name, tmp_dir=tmp_dir)
+        super().__init__(bucket_name=bucket_name)
 
-        self.logger = _config_logger(logs_name="Storage")
+        self.logger = _config_logger(logs_name="StorageS3")
 
         self.s3_client = boto3.client(
             service_name="s3",
@@ -61,11 +58,6 @@ class StorageS3(Storage):
             aws_secret_access_key=aws_secret_access_key,
             region_name=aws_region_name,
         )
-
-        # StorageS3 neeeds a working folder to download/upload files from a unique entry point
-        if not os.path.exists(self.tmp_dir):
-            os.mkdir(self.tmp_dir)
-            print(f"StorageS3 >> Temporary folder created: '{self.tmp_dir}'")
 
         return None
 
@@ -490,7 +482,6 @@ class StorageS3(Storage):
         print(f"StorageS3 >> Directory upload complete")
 
         return None
-
 
     def upload_urls(
         self, keys: Union[str, list[str]], content_types: Optional[List] = None

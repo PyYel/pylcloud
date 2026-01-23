@@ -5,8 +5,8 @@ from collections.abc import Sequence
 from io import BytesIO
 import requests
 
-from constants import INFERENCE_HOST
-from gpt import GPT
+from .GPT import GPT
+from pylcloud import _config_logger
 
 
 class GPTServer(GPT):
@@ -20,7 +20,9 @@ class GPTServer(GPT):
 
         This only supports generative AI.
         """
-        super().__init__(logs_name="GPTServer", logs_dir=None)
+        super().__init__()
+
+        self.logger = _config_logger(logs_name="GPTServer")
 
         self.available_models = {
             "llama-3.2-1B": {
@@ -33,7 +35,7 @@ class GPTServer(GPT):
 
         return None
 
-    def return_query(
+    def return_generation(
         self,
         model_name: str,
         user_prompt: str,
@@ -61,7 +63,7 @@ class GPTServer(GPT):
             print(f"GPTLocal >> An error occured: {(results.get('message'))}")
             return results
 
-    def yield_query(
+    def yield_generation(
         self,
         model_name: str,
         user_prompt: str,
@@ -75,5 +77,11 @@ class GPTServer(GPT):
     ):
         raise NotImplementedError
 
-    def _reset_session(self, **kwargs):
-        return None
+    def return_embedding(
+        self,
+        model_name: str,
+        prompt: str,
+        files: List[str | BytesIO] = [],
+        dimensions: int = 512,
+    ) -> dict | dict[str, str | int]:
+        raise NotImplementedError

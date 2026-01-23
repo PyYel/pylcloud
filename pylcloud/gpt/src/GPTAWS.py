@@ -13,7 +13,7 @@ import boto3
 from collections.abc import Generator
 import heapq
 
-from gpt import GPT
+from .GPT import GPT
 from pylcloud import _config_logger
 
 
@@ -36,19 +36,21 @@ class GPTAWS(GPT):
 
         self.logger = _config_logger(logs_name="GPTAWS")
 
+        self.AWS_REGION_NAME: str = kwargs.get("AWS_REGION_NAME", "")
+
         self.bedrock_client = boto3.client(
             service_name="bedrock",
             aws_access_key_id=kwargs.get("AWS_ACCESS_KEY_ID"),
             aws_secret_access_key=kwargs.get("AWS_ACCESS_KEY_SECRET"),
-            region_name=kwargs.get("AWS_REGION_NAME"),
+            region_name=self.AWS_REGION_NAME,
         )
         # aws_session_token=aws_session_token)
 
         self.bedrock_runtime_client = boto3.client(
             service_name="bedrock-runtime",
-            aws_access_key_id=AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=AWS_ACCESS_KEY_SECRET,
-            region_name=AWS_REGION_NAME,
+            aws_access_key_id=kwargs.get("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=kwargs.get("AWS_ACCESS_KEY_SECRET"),
+            region_name=kwargs.get("AWS_REGION_NAME"),
         )
         # aws_session_token=aws_session_token)
 
@@ -56,7 +58,7 @@ class GPTAWS(GPT):
             "claude-4-sonnet": {
                 "model_id": (
                     "eu.anthropic.claude-sonnet-4-20250514-v1:0"
-                    if AWS_REGION_NAME.startswith("eu")
+                    if self.AWS_REGION_NAME.startswith("eu")
                     else "anthropic.claude-sonnet-4-20250514-v1:0"
                 ),
                 "anthropic_version": "bedrock-2023-05-31",
@@ -68,21 +70,21 @@ class GPTAWS(GPT):
             "nova-micro": {
                 "model_id": (
                     "eu.amazon.nova-micro-v1:0"
-                    if AWS_REGION_NAME.startswith("eu")
+                    if self.AWS_REGION_NAME.startswith("eu")
                     else "amazon.nova-micro-v1:0"
                 ),
             },
             "nova-lite": {
                 "model_id": (
                     "eu.amazon.nova-lite-v1:0"
-                    if AWS_REGION_NAME.startswith("eu")
+                    if self.AWS_REGION_NAME.startswith("eu")
                     else "amazon.nova-lite-v1:0"
                 ),
             },
             "nova-pro": {
                 "model_id": (
                     "eu.amazon.nova-pro-v1:0"
-                    if AWS_REGION_NAME.startswith("eu")
+                    if self.AWS_REGION_NAME.startswith("eu")
                     else "amazon.nova-pro-v1:0"
                 ),
             },

@@ -17,8 +17,8 @@ class AWSBedrockModels(AWS):
 
     def __init__(
         self,
-        aws_access_key_id: str,
-        aws_secret_access_key: str,
+        aws_access_key_id: str = "",
+        aws_secret_access_key: str = "",
         aws_region_name: str = "eu-west-1",
         aws_session_token: str = str(uuid.uuid4()),
     ) -> None:

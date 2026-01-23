@@ -4,7 +4,6 @@ __all__ = [
     "GPTServer",
 ]
 
-from .src.GPT import GPT
 
 from .src.GPTAWS import GPTAWS
 

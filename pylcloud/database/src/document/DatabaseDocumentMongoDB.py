@@ -30,14 +30,7 @@ class DatabaseDocumentMongoDB(DatabaseDocument):
         # When connecting to Kibana server, custom users credentials should be used. They can be created from withing the Kibana server
         # interface, through the elastic superuser account (which are actually the credentials used above: ELASTIC_USERNAME, ELASTIC_PASSWORD)
 
-    def _connect_database(self):
-        pass
-
-    def create_table(self, *args, **kwargs):
-        """See ``create_index()``."""
-        return self.create_index(*args, **kwargs)
-
-    def create_index(self):
+    def connect_database(self):
         pass
 
     def disconnect_database(self):
@@ -46,34 +39,17 @@ class DatabaseDocumentMongoDB(DatabaseDocument):
         """
         pass
 
-    def drop_database(self, database_name: str):
-        """
-        Drops all the indexes from a cluster.
-        """
-        print(
-            "NoSQLElasticsearch >> Can't drop an Elasticsearch. Will drop all the indexes from this cluster instead."
-        )
-        raise NotImplementedError
+    def describe_database(self, system_db: bool = False):
+        raise NotADirectoryError
+
+    def create_collection(self, *args, **kwargs):
+        return super().create_collection(*args, **kwargs)
 
     def drop_collection(self, collection_name: str):
         pass
 
-    def drop_table(self, table_name: str):
-        """See ``drop_collection()``."""
-        self.drop_collection(collection_name=table_name)
-
-    def delete_data(self, index: str, pairs: dict[str, str] = {}):
-        pass
-
-    def list_databases(self, system_db: bool = False):
-        pass
-
     def list_collections(self, system_db: bool = False):
         pass
-
-    def list_tables(self, database_name: Optional[str] = None):
-        """See ``list_collections()``."""
-        self.list_collections()
 
     def send_data(self, index_name: str, documents: list[dict]):
         pass
@@ -85,3 +61,9 @@ class DatabaseDocumentMongoDB(DatabaseDocument):
         should_pairs: list[dict[str, str]] = [],
     ):
         pass
+
+    def delete_data(self, index: str, pairs: dict[str, str] = {}):
+        pass
+
+    def update_data(self, *args, **kwargs):
+        return super().update_data(*args, **kwargs)

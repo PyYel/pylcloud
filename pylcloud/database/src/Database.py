@@ -21,7 +21,7 @@ class Database(ABC):
         # Default logger fallback
         self.logger = _config_logger(
             logs_name="Database",
-            logs_output=["console"],
+            logs_output="console",
         )
 
         return None

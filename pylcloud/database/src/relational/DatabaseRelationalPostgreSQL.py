@@ -508,12 +508,11 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
 
         return None
 
-    def drop_database(self, schema: str):
+    def describe_database(self):
         """
-        See ``drop_schema()``.
+        Describes the schemas of the connected database.
         """
-        self.logger.debug("Drop database not allowed. Drop schemas instead.")
-        return self.drop_schema(schema=schema)
+        return self.list_schemas(include_system_schemas=False)
 
     def list_databases(self, display: bool = False):
         """

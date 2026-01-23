@@ -9,7 +9,8 @@ from requests_aws4auth import AWS4Auth
 
 # Removes unverified HTTPS SSL traffic warnings
 warnings.filterwarnings(
-    "ignore", "Connecting to .+ using TLS with verify_certs=False is insecure"
+    "ignore",
+    message=r"Connecting to .* using SSL with verify_certs=False is insecure\.",
 )
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -251,23 +252,13 @@ class DatabaseSearchOpensearch(DatabaseSearch):
 
         return None
 
-    def list_databases(self, *args, **kwargs):
-        """See ``list_clusters()``."""
-        self.logger.warning("Use list clusters instead.")
-        return self.list_clusters(*args, **kwargs)
-
-    def list_clusters(self):
+    def describe_database(self):
         """
-        List the databases (clusters) present on an OpenSearch server.
+        List the databases (clusters) present on an Elasticsearch DB server.
         """
         info = self.api_os.info()
         self.logger.info(f"Cluster info: {info}")
         return info
-
-    def list_tables(self, *args, **kwargs):
-        """See ``list_indexes()``."""
-        self.logger.warning("Use list indexes instead.")
-        return self.list_indexes(*args, **kwargs)
 
     def list_indexes(self, system_db: bool = False):
         """
@@ -391,8 +382,7 @@ class DatabaseSearchOpensearch(DatabaseSearch):
                 f"Field search found {len(documents)} matching documents."
             )
         except NotFoundError as e:
-            e.info
-            self.logger.error(f"Index '{e.info['error']['index']}' not found.")
+            self.logger.error(f"Index '{e.info['error']['index']}' not found.")  # type: ignore
             return []
         except Exception as e:
             self.logger.error(f"An error occurred during semantic search: {e}")

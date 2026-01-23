@@ -4,16 +4,17 @@ from abc import ABC, abstractmethod
 from typing import Optional, Union
 from pathlib import Path
 import mimetypes
-
+import tempfile
 
 from pylcloud import _config_logger
+
 
 class Storage(ABC):
     """
     Inetrnal storage services helper.
     """
 
-    def __init__(self, bucket_name: str = "storage", tmp_dir: Optional[str] = None):
+    def __init__(self, bucket_name: str = "storage"):
         """
         Initializes the helper.
         """
@@ -22,17 +23,13 @@ class Storage(ABC):
         # Default logger fallback
         self.logger = _config_logger(
             logs_name="Storage",
-            logs_output=["console"],
+            logs_output="console",
         )
-        
+
         self.bucket_name = bucket_name
 
-        if (tmp_dir is None) or not os.path.exists(tmp_dir):
-            self.tmp_dir = os.path.join(os.getcwd(), "tmp")
-            os.makedirs(self.tmp_dir, exist_ok=True)
-            print(f"Storage >> Temporary folder created: '{self.tmp_dir}")
-        else:
-            self.tmp_dir = tmp_dir
+        self._tmp_ctx = tempfile.TemporaryDirectory(prefix="storages3_")
+        self.tmp_dir = self._tmp_ctx.name
 
         # TODO: Add connection certificate
 

@@ -10,7 +10,7 @@ class AWSECR:
     A class to simplify AWS ECR operations with SSO authentication.
     """
 
-    def __init__(self, profile_name, region, account_id=None):
+    def __init__(self, profile_name: str = "", region: str = "", account_id=None):
         """
         Initialize the ECR manager with AWS profile and region.
 

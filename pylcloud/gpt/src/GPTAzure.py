@@ -4,7 +4,8 @@ from typing import Any, List, Union
 from uuid import uuid4
 
 
-from gpt import GPT
+from .GPT import GPT
+from pylcloud import _config_logger
 
 
 class GPTAzure(GPT):
@@ -18,7 +19,9 @@ class GPTAzure(GPT):
 
         This only supports generative AI.
         """
-        super().__init__(logs_name="GPTAzure", logs_dir=None)
+        super().__init__()
+
+        self.logger = _config_logger(logs_name="GPTAzure")
 
         self.available_models = {
             "chat-gpt-4o": {"model_id": "openai.gpt-4o"},
@@ -32,7 +35,7 @@ class GPTAzure(GPT):
 
         return None
 
-    def return_query(
+    def return_generation(
         self,
         model_name: str,
         user_prompt: str,
@@ -47,7 +50,7 @@ class GPTAzure(GPT):
     ) -> dict[str, Union[str, dict[str, int]]]:
         raise NotImplementedError
 
-    def yield_query(
+    def yield_generation(
         self,
         model_name: str,
         user_prompt: str,
@@ -59,4 +62,13 @@ class GPTAzure(GPT):
         top_k: int = 32,
         top_p: float = 0.7,
     ):
+        raise NotImplementedError
+
+    def return_embedding(
+        self,
+        model_name: str,
+        prompt: str,
+        files: List[str | BytesIO] = [],
+        dimensions: int = 512,
+    ) -> dict | dict[str, str | int]:
         raise NotImplementedError

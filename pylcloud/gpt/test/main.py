@@ -1,6 +1,11 @@
 import os, sys
 
+from pylcloud.gpt import GPTAWS, GPTAzure, GPTServer
 
-MAIN_DIR_PATH = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-if __name__ == "__main__":
-    sys.path.append(MAIN_DIR_PATH)
+# This is a test file. Run it with pyyel as an installed package.
+
+for cls in [GPTServer, GPTAWS, GPTAzure]:
+    try:
+        cls()
+    except Exception as e:
+        print(e)

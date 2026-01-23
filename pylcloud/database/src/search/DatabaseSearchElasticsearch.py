@@ -202,23 +202,13 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
 
         return None
 
-    def list_databases(self, *args, **kwargs):
-        """See ``list_clusters()``."""
-        self.logger.warning("Use list clusters instead.")
-        return self.list_clusters(*args, **kwargs)
-
-    def list_clusters(self):
+    def describe_database(self):
         """
         List the databases (clusters) present on an Elasticsearch DB server.
         """
         info = self.es.info()
         self.logger.info(f"Cluster info: {info}")
         return info
-
-    def list_tables(self, *args, **kwargs):
-        """See ``list_indexes()``."""
-        self.logger.warning("Use list indexes instead.")
-        return self.list_indexes(*args, **kwargs)
 
     def list_indexes(self, system_db: bool = False):
         """
@@ -283,7 +273,7 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
         return None
 
     def update_data(self, *args, **kwargs):
-        return super().update_data(*args, **kwargs)
+        raise NotImplementedError
 
     def query_data(
         self,
@@ -374,8 +364,8 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
     def similarity_search(
         self,
         index_name: str,
-        query_vector: list[float] = None,
-        query_text: str = None,
+        query_vector: Optional[list[float]] = None,
+        query_text: Optional[str] = None,
         must_pairs: list[dict[str, str]] = [],
         should_pairs: list[dict[str, str]] = [],
         vector_field: str = "chunk_vector",
