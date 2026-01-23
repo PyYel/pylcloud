@@ -24,7 +24,7 @@ classifiers = [
 all = ["pylcloud[database,storage,gpt]"]
 database = [
     "mysql-connector-python", 
-    "psycopg2",
+    "psycopg[binary]>=3.1",
     "boto3", 
     "elasticsearch", 
     "opensearch-py"
