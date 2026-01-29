@@ -162,3 +162,25 @@ class StorageMinIO(Storage):
         ]
 
         return urls
+
+    def download_urls(self, keys: Union[str, list[str]]) -> list[str]:
+        """
+        Generate presigned URLs for downloading files from a private bucket.
+        """
+
+        if isinstance(keys, str):
+            keys = [keys]
+
+        urls = [
+            self.s3_client.generate_presigned_url(
+                ClientMethod="get_object",
+                Params={
+                    "Bucket": self.bucket_name,
+                    "Key": key,
+                },
+                ExpiresIn=3600,
+            )
+            for key in keys
+        ]
+
+        return urls

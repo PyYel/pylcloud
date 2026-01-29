@@ -95,7 +95,7 @@ class StorageS3(Storage):
         if isinstance(keys, str):
             return _ensure_key(key=keys)
 
-        print(f"StorageS3 >> Verifying the existence of {len(keys)} keys on the cloud.")
+        self.logger.info(f"Verifying the existence of {len(keys)} keys on the cloud.")
         results = {}
         failures = 0
         with tqdm(total=len(keys)) as pbar:
@@ -112,9 +112,7 @@ class StorageS3(Storage):
                     pbar.update(1)
 
         if failures:
-            print(
-                f"StorageS3 >> Failed to verify the existence of {failures}/{len(keys)} keys."
-            )
+            self.logger.error(f"Failed to verify the existence of {failures}/{len(keys)} keys.")
 
         return results
 
@@ -152,11 +150,11 @@ class StorageS3(Storage):
             ]
         else:
             if not all([os.path.exists(os.path.dirname(path)) for path in paths]):
-                print("StorageS3 >> Download path do not exist. Download aborted.")
+                self.logger.info("Download path do not exist. Download aborted.")
                 return False
 
         failed_files = []
-        print(f"StorageS3 >> Downloading {len(keys)} files.")
+        self.logger.info(f"Downloading {len(keys)} files.")
         with tqdm(total=len(keys), disable=display) as pbar:
             with ThreadPoolExecutor(max_workers=2 * os.cpu_count()) as executor:  # type: ignore
                 futures = []
@@ -169,10 +167,8 @@ class StorageS3(Storage):
                         failed_files.append(future)
                     pbar.update(1)
         if failed_files:
-            print("StorageS3 >> An error was raised (only one is shown if many): \n", e)  # type: ignore
-            print(
-                f"StorageS3 >> Error downloading {len(failed_files)}/{len(keys)} files. See error above."
-            )
+            self.logger.error(f"An error was raised (only one is shown if many): \n {str(e)}") # type: ignore
+            self.logger.error(f"Error downloading {len(failed_files)}/{len(keys)} files. See error above.")
 
         return failed_files
 
@@ -214,9 +210,7 @@ class StorageS3(Storage):
 
         file_idx = 0
         failed_files = []
-        print(
-            f"StorageS3 >> Downloading batch of content from '{key}'"
-        )  #: {page}/{page_total}")
+        self.logger.info(f"Downloading batch of content from '{key}'")  #: {page}/{page_total}")
         with tqdm(total=page_total) as pbar:
             for result in paginator.paginate(Bucket=self.bucket_name, Prefix=key):
                 if result.get("Contents") is not None:
@@ -249,7 +243,7 @@ class StorageS3(Storage):
                     pbar.update(1)
 
         if failed_files:
-            print("StorageS3 >> An error was raised (only one is shown if many): \n", e)  # type: ignore
+            self.logger.info("An error was raised (only one is shown if many): \n", e)  # type: ignore
             print(
                 f"StorageS3 >> Error downloading {len(failed_files)} files. See error above."
             )
@@ -271,14 +265,14 @@ class StorageS3(Storage):
             The list of keys that match the ``prefix``.
         """
 
-        if not self.ensure_keys(keys=prefix):
+        if not self.ensure_files(keys=prefix):
             raise ValueError(
                 f"StorageS3 >> File listing prefix '{prefix}' does not exist"
             )
 
         paginator = self.s3_client.get_paginator("list_objects_v2")
         file_list = []
-        print(f"StorageS3 >> Listing files in {self.bucket_name}/{prefix}")
+        self.logger.info("Listing files in {self.bucket_name}/{prefix}")
         for result in paginator.paginate(Bucket=self.bucket_name, Prefix=prefix):
             if result.get("Contents") is not None:
                 for obj in result["Contents"]:
@@ -300,9 +294,9 @@ class StorageS3(Storage):
         if isinstance(keys, str):
             if self.ensure_files(keys=keys):
                 self.s3_client.delete_object(Bucket=self.bucket_name, Key=keys)
-                print("StorageS3 >> Key deleted successfully.")
+                self.logger.info("Key deleted successfully.")
             else:
-                print(f"StorageS3 >> Key {keys} not found.")
+                self.logger.info(f"Key {keys} not found.")
             return None
 
         if keys != []:
@@ -311,7 +305,7 @@ class StorageS3(Storage):
                 batched_keys.append(keys[batch_start : batch_start + 1000])
 
             deleted_counter = 0
-            print(f"StorageS3 >> Deleting {len(keys)} keys.")
+            self.logger.info(f"Deleting {len(keys)} keys.")
             for batch in tqdm(batched_keys):
                 response = self.s3_client.delete_objects(
                     Bucket=self.bucket_name,
@@ -320,18 +314,14 @@ class StorageS3(Storage):
                 deleted_counter += len(response.get("Deleted", []))
 
             if deleted_counter == len(keys):
-                print(
-                    f"StorageS3 >> All {deleted_counter} keys were successfully deleted."
-                )
+                self.logger.info(f"All {deleted_counter} keys were successfully deleted.")
             else:
-                print(
-                    f"StorageS3 >> Only {deleted_counter} out of {len(keys)} keys were successfully deleted."
-                )
+                self.logger.warning(f"Only {deleted_counter} out of {len(keys)} keys were successfully deleted.")
 
             return None
 
         else:
-            print(f"StorageS3 >> No keys were deleted as the input was empty.")
+            self.logger.info("No keys were deleted as the input was empty.")
 
         return None
 
@@ -358,10 +348,10 @@ class StorageS3(Storage):
         """
 
         if not (self.ensure_keys(keys=original_key)):
-            print(f"StorageS3 >> Original key {original_key} does not exist.")
+            self.logger.info("Original key {original_key} does not exist.")
 
         elif self.ensure_keys(keys=new_key):
-            print(f"StorageS3 >> New key {new_key} already exist.")
+            self.logger.info("New key {new_key} already exist.")
 
         else:
             self.s3_client.copy(
@@ -412,7 +402,7 @@ class StorageS3(Storage):
                 )
                 return True
             except Exception as e:
-                print(f"StorageS3 >> Error uploading {path} to {key}: {str(e)}")
+                self.logger.info("Error uploading {path} to {key}: {str(e)}")
                 return False
 
         if content_types is None:
@@ -475,11 +465,11 @@ class StorageS3(Storage):
                 all_keys.append(s3_key)
                 all_content_types.append(content_type)
 
-        print(f"StorageS3 >> Found {len(all_files)} files to upload from '{path}'.")
+        self.logger.info("Found {len(all_files)} files to upload from '{path}'.")
         self.upload_files(
             keys=all_keys, paths=all_files, content_types=all_content_types
         )
-        print(f"StorageS3 >> Directory upload complete")
+        self.logger.info("Directory upload complete")
 
         return None
 
@@ -514,7 +504,7 @@ class StorageS3(Storage):
             return urls
 
         except Exception as e:
-            print(f"StorageS3 >> Error generating presigned urls: {str(e)}")
+            self.logger.info("Error generating presigned urls: {str(e)}")
             return []
 
     def download_urls(self, keys: Union[str, List[str]]) -> List[str]:
@@ -541,5 +531,5 @@ class StorageS3(Storage):
             return urls
 
         except Exception as e:
-            print(f"StorageS3 >> Error generating presigned urls: {str(e)}")
+            self.logger.info("Error generating presigned urls: {str(e)}")
             return []
