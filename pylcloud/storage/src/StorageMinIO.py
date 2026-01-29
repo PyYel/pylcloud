@@ -137,3 +137,28 @@ class StorageMinIO(Storage):
 
     def download_directory(self, key: str, path: str | None = None) -> None:
         return super().download_directory(key, path)
+
+    def upload_urls(
+        self, keys: Union[str, list[str]], content_types: Optional[list[str]] = None
+    ) -> list[str]:
+
+        if isinstance(keys, str):
+            keys = [keys]
+
+        if content_types is None:
+            content_types = ["application/octet-stream"] * len(keys)
+
+        urls = [
+            self.s3_client.generate_presigned_url(
+                ClientMethod="put_object",
+                Params={
+                    "Bucket": self.bucket_name,
+                    "Key": key,
+                    "ContentType": content_type,
+                },
+                ExpiresIn=3600,
+            )
+            for key, content_type in zip(keys, content_types)
+        ]
+
+        return urls
