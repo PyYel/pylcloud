@@ -129,7 +129,6 @@ class GPTAWS(GPT):
         self,
         model_name: str,
         prompt: str,
-        files: List[Union[str, BytesIO]] = [],
         dimensions: int = 512,
     ) -> dict[str, Union[list[float], dict[str, int]]]:
         """

@@ -77,7 +77,6 @@ class GPT(ABC):
         self,
         model_name: str,
         prompt: str,
-        files: List[Union[str, BytesIO]] = [],
         dimensions: int = 512,
     ) -> Union[dict, dict[str, Union[str, int]]]:
         raise NotImplementedError
