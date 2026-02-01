@@ -72,7 +72,7 @@ class Database(ABC):
         raise NotImplementedError
 
     def _hash_content(
-        self, content: str, prefixes: List[str], algo: str = "md5"
+        self, content: str, prefixes: List[str] = [], algo: str = "md5"
     ) -> str:
         """
         Hashes a document content into a unique id of format <prefixes>-<hashed_content>.
