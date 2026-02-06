@@ -397,6 +397,7 @@ class DatabaseSearchOpensearch(DatabaseSearch):
         self,
         index_name: str,
         query_vector: list[float],
+        field_name: str = "chunk.vector",
         must_pairs: list[dict[str, str]] = [],
         should_pairs: list[dict[str, str]] = [],
         k: int = 5,
@@ -410,6 +411,8 @@ class DatabaseSearchOpensearch(DatabaseSearch):
             The OpenSearch index to search in.
         query_vector : list
             The vector representation of the input query.
+        filed_name: str
+            The name (key) of the field of the vector in the DB. Nested keys should be joined by a dot (.). 
         must_pairs: list[dict[str]]
             A list of ALL the label-value pairs that a record must match to be selected.
         should_pairs: list[dict[str]]
@@ -434,7 +437,7 @@ class DatabaseSearchOpensearch(DatabaseSearch):
         # OpenSearch uses a different syntax for k-NN queries compared to Elasticsearch 8.x
         query = {
             "size": k,
-            "query": {"knn": {"chunk.vector": {"vector": query_vector, "k": k}}},
+            "query": {"knn": {field_name: {"vector": query_vector, "k": k}}},
         }
 
         # If we have boolean conditions, we need to use a script_score approach
@@ -454,7 +457,7 @@ class DatabaseSearchOpensearch(DatabaseSearch):
                             "source": "knn_score",
                             "lang": "knn",
                             "params": {
-                                "field": "chunk.vector",
+                                "field": field_name,
                                 "query_value": query_vector,
                                 "space_type": "cosinesimil",  # or "l2" depending on your vector space
                             },
