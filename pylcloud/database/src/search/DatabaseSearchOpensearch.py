@@ -433,21 +433,33 @@ class DatabaseSearchOpensearch(DatabaseSearch):
         should_conditions = []
         for should_pair in should_pairs:
             should_conditions.append({"term": should_pair})
-            
+
+        # query = {
+        #     "size": k,
+        #     "query": {
+        #         "knn": {
+        #             field_name: {
+        #                 "vector": query_vector,
+        #                 "k": k,
+        #                 "filter": {
+        #                     "bool": {
+        #                         "must": must_conditions,
+        #                         "should": should_conditions,
+        #                         "minimum_should_match": 1 if should_conditions else 0
+        #                     }
+        #                 }
+        #             }
+        #         }
+        #     }
+        # }
+
         query = {
             "size": k,
             "query": {
                 "knn": {
                     field_name: {
                         "vector": query_vector,
-                        "k": k,
-                        "filter": {
-                            "bool": {
-                                "must": must_conditions,
-                                "should": should_conditions,
-                                "minimum_should_match": 1 if should_conditions else 0
-                            }
-                        }
+                        "k": k
                     }
                 }
             }
