@@ -433,38 +433,26 @@ class DatabaseSearchOpensearch(DatabaseSearch):
         should_conditions = []
         for should_pair in should_pairs:
             should_conditions.append({"term": should_pair})
-
-        # OpenSearch uses a different syntax for k-NN queries compared to Elasticsearch 8.x
+            
         query = {
             "size": k,
-            "query": {"knn": {field_name: {"vector": query_vector, "k": k}}},
-        }
-
-        # If we have boolean conditions, we need to use a script_score approach
-        if must_conditions or should_conditions:
-            query = {
-                "size": k,
-                "query": {
-                    "script_score": {
-                        "query": {
+            "query": {
+                "knn": {
+                    field_name: {
+                        "vector": query_vector,
+                        "k": k,
+                        "filter": {
                             "bool": {
                                 "must": must_conditions,
                                 "should": should_conditions,
-                                "minimum_should_match": 1 if should_conditions else 0,
+                                "minimum_should_match": 1 if should_conditions else 0
                             }
-                        },
-                        "script": {
-                            "source": "knn_score",
-                            "lang": "knn",
-                            "params": {
-                                "field": field_name,
-                                "query_value": query_vector,
-                                "space_type": "cosinesimil",  # or "l2" depending on your vector space
-                            },
-                        },
+                        }
                     }
-                },
+                }
             }
+        }
+
 
         try:
             response = self.api_os.search(index=index_name, body=query)
