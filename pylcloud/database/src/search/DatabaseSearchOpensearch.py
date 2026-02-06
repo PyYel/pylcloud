@@ -15,7 +15,7 @@ warnings.filterwarnings(
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 from .DatabaseSearch import DatabaseSearch
-
+from pylcloud import _config_logger
 
 class DatabaseSearchOpensearch(DatabaseSearch):
     """
@@ -52,7 +52,9 @@ class DatabaseSearchOpensearch(DatabaseSearch):
             - Documents are records.
             - Fields are similar to columns (although they may be nested).
         """
-        super().__init__(logs_name="DatabaseOpenSearch")
+        super().__init__()
+
+        self.logger = _config_logger(logs_name="DatabaseSearchOpensearch")
 
         self.host = host
         self.user = user

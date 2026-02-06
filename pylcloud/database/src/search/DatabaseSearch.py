@@ -13,11 +13,11 @@ class DatabaseSearch(Database):
     Databases API helper.
     """
 
-    def __init__(self, logs_name: str):
+    def __init__(self):
         """
         Initializes the helper and its logging.
         """
-        super().__init__(logs_name=logs_name)
+        super().__init__()
 
         return None
 
