@@ -293,7 +293,10 @@ class GPTAWS(GPT):
                 usage = response_body["usage"]
             elif "nova" in model_name:
                 text = response_body["output"]["message"]["content"][0]["text"]
-                usage = response_body["usage"]
+                usage = {
+                    "input_tokens": response_body["usage"]["inputTokens"],
+                    "output_tokens": response_body["usage"]["outputTokens"]
+                }
             else:
                 self.logger.warning(f"Invalid model name '{model_name}'.")
                 return {}
@@ -413,7 +416,6 @@ class GPTAWS(GPT):
                             text += t
                             yield t
                             expected_seq += 1
-
                     elif chunk["type"] == "message_stop":
                         usage = {
                             "input_tokens": chunk.get(
@@ -443,10 +445,10 @@ class GPTAWS(GPT):
                     elif "metadata" in chunk:
                         usage = {
                             "input_tokens": chunk["metadata"]["usage"].get(
-                                "inputTokenCount", 0
+                                "inputTokens", 0
                             ),
                             "output_tokens": chunk["metadata"]["usage"].get(
-                                "outputTokenCount", 0
+                                "outputTokens", 0
                             ),
                         }
                         yield {"text": text, "usage": usage}

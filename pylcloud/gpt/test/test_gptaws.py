@@ -16,7 +16,9 @@ api = GPTAWS(
     AWS_REGION_NAME=os.getenv("AWS_REGION_NAME")
 )
 
-print(api.return_generation(model_name="nova-lite", user_prompt="test"))
+answer = api.return_generation(model_name="nova-lite", user_prompt="test")
+print(answer)
 
 for chunk in api.yield_generation(model_name="nova-lite", user_prompt="test"):
     print(chunk)
+    answer = chunk
