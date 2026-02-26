@@ -66,8 +66,8 @@ class GPT(ABC):
         costs = self.costs[model_name]
 
         usage_compute = {
-            "input_tokens": usage["inputTokens"] * costs["input_tokens"],
-            "output_tokens": usage["outputTokens"] * costs["output_tokens"],
+            "input_tokens": usage["input_tokens"] * costs["input_tokens"],
+            "output_tokens": usage["output_tokens"] * costs["output_tokens"],
         }
 
         return usage_compute

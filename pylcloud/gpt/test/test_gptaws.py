@@ -22,3 +22,5 @@ print(answer)
 for chunk in api.yield_generation(model_name="nova-lite", user_prompt="test"):
     print(chunk)
     answer = chunk
+print(answer)
+print(api.compute_costs(model_name="nova-lite", usage=answer["usage"]))
