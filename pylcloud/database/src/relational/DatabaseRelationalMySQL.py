@@ -1,5 +1,4 @@
 import os, sys
-import psycopg2
 from typing import Union, Optional, Any
 import json
 from mysql import connector

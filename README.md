@@ -6,7 +6,7 @@
     <img src="https://img.shields.io/badge/Boto3-AWS-FF9900?logo=amazonaws&logoColor=white" />
     <img src="https://img.shields.io/badge/AWS4Auth-Signed%20Requests-232F3E?logo=amazonaws&logoColor=white" />
     <img src="https://img.shields.io/badge/MySQL-Connector-4479A1?logo=mysql&logoColor=white" />
-    <img src="https://img.shields.io/badge/PostgreSQL-psycopg2-336791?logo=postgresql&logoColor=white" />
+    <img src="https://img.shields.io/badge/PostgreSQL-psycopg-336791?logo=postgresql&logoColor=white" />
     <img src="https://img.shields.io/badge/OpenSearch-enabled-005EB8" />
     <img src="https://img.shields.io/badge/Elasticsearch-enabled-005571?logo=elasticsearch&logoColor=white" />
     <img src="https://img.shields.io/badge/FastAPI-latest-009688?logo=fastapi&logoColor=white" />
