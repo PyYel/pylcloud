@@ -146,7 +146,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             self.conn = None
 
         try:
-            conn_params = self._get_connection_params(database, user, password)
+            conn_params = _get_connection_params(database, user, password)
             self.conn = psycopg.connect(**conn_params)
             # psycopg v3: autocommit is a property set after connect
             self.conn.autocommit = True
