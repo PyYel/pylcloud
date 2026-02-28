@@ -560,7 +560,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
                 if JOIN is not None:
                     join_clauses = [JOIN] if isinstance(JOIN, str) else list(JOIN)
                     for clause in join_clauses:
-                        parts.append(sql.SQL(clause))
+                        parts.append(sql.SQL("JOIN ") + sql.SQL(clause))
 
                 params: list = []
                 where_composable: Optional[sql.Composable] = None
@@ -576,7 +576,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
                             self.logger.warning("WHERE columns and VALUES count mismatch.")
                             return []
                         where_composable = sql.SQL(" AND ").join(
-                            sql.SQL("{col} = %s").format(col=sql.Identifier(col))
+                            sql.SQL("{col} = %s").format(col=self._col_to_identifier(col))
                             for col in where_cols
                         )
                         params = values
@@ -589,7 +589,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
                             self.logger.warning("WHERE columns and LIKE patterns count mismatch.")
                             return []
                         where_composable = sql.SQL(" AND ").join(
-                            sql.SQL("{col} LIKE %s").format(col=sql.Identifier(col))
+                            sql.SQL("{col} LIKE %s").format(col=self._col_to_identifier(col))
                             for col in where_cols
                         )
                         params = patterns
@@ -715,7 +715,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
                             self.logger.warning("WHERE columns and VALUES count mismatch.")
                             return
                         where_composable = sql.SQL(" AND ").join(
-                            sql.SQL("{col} = %s").format(col=sql.Identifier(col))
+                            sql.SQL("{col} = %s").format(col=self._col_to_identifier(col))
                             for col in where_cols
                         )
                         where_values = values
@@ -728,7 +728,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
                             self.logger.warning("WHERE columns and LIKE patterns count mismatch.")
                             return
                         where_composable = sql.SQL(" AND ").join(
-                            sql.SQL("{col} LIKE %s").format(col=sql.Identifier(col))
+                            sql.SQL("{col} LIKE %s").format(col=self._col_to_identifier(col))
                             for col in where_cols
                         )
                         where_values = patterns
@@ -808,7 +808,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
                     self.logger.warning("WHERE columns and VALUES count mismatch.")
                     return
                 where_composable = sql.SQL(" AND ").join(
-                    sql.SQL("{col} = %s").format(col=sql.Identifier(col))
+                    sql.SQL("{col} = %s").format(col=self._col_to_identifier(col))
                     for col in where_cols
                 )
                 params = values
@@ -819,7 +819,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
                     self.logger.warning("WHERE columns and LIKE patterns count mismatch.")
                     return
                 where_composable = sql.SQL(" AND ").join(
-                    sql.SQL("{col} LIKE %s").format(col=sql.Identifier(col))
+                    sql.SQL("{col} LIKE %s").format(col=self._col_to_identifier(col))
                     for col in where_cols
                 )
                 params = patterns
@@ -987,3 +987,13 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             self.conn.rollback()
         except Exception:
             self.logger.error("Failed to rollback transaction.")
+
+    def _col_to_identifier(self, col: str) -> sql.Composable:
+        """Convert 'table.column' or 'column' to a safe sql.Composable identifier."""
+        parts = col.split(".", 1)
+        if len(parts) == 2:
+            return sql.SQL("{t}.{c}").format(
+                t=sql.Identifier(parts[0]),
+                c=sql.Identifier(parts[1])
+            )
+        return sql.Identifier(col)
