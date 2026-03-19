@@ -93,7 +93,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
         self.aws_region_name = aws_region_name
-        self.conn: Optional[psycopg.Connection] = None
+        self.conn: psycopg.Connection
 
     def connect_database(
         self, database: str, user: str, password: Optional[str] = None
@@ -877,7 +877,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             self.connect_database(self.database, self.user, self.password)
 
         try:
-            self.logger.warning(f"Running raw SQL: {SQL}")
+            self.logger.warning(f"Running raw SQL: {" ".join(SQL.split())}")
 
             with self.conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(SQL, VALUES or ())
