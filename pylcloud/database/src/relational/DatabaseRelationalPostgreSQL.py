@@ -93,7 +93,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
         self.aws_region_name = aws_region_name
-        self.conn: psycopg.Connection
+        self.conn: Optional[psycopg.Connection] = None
 
     def connect_database(
         self, database: str, user: str, password: Optional[str] = None
