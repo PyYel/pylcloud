@@ -878,15 +878,20 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
 
         try:
             self.logger.warning(f"Running raw SQL: {SQL}")
+
             with self.conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(SQL, VALUES or ())
-                rows = [dict(row) for row in cur.fetchall()]
-            return rows
+
+                if cur.description is not None:
+                    rows = [dict(row) for row in cur.fetchall()]
+                    return rows
+                else:
+                    return []
 
         except Exception as e:
             self.logger.critical(f"Raw SQL failed: {e}")
             return []
-
+    
     def execute_file(self, file_path: str) -> None:
         """
         Execute SQL from a ``.sql`` file or insert records from a ``.json`` file.
