@@ -1,0 +1,136 @@
+services:
+  opensearch:
+    image: opensearchproject/opensearch:3.5.0
+    container_name: os01
+    env_file:
+      - .env
+    environment:
+      - cluster.name=opensearch-cluster
+      - node.name=os01
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_ROOTPASSWORD}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - "127.0.0.1:9200:9200"
+      - "127.0.0.1:9600:9600"
+    volumes:
+      - osdata:/usr/share/opensearch/data
+    networks:
+      - osnet
+    entrypoint: |
+      /bin/bash -c '
+      echo "============================================================"
+      echo "Generating bcrypt hashes from environment variables..."
+      
+      ADMIN_HASH=$$(/usr/share/opensearch/plugins/opensearch-security/tools/hash.sh -p "$${OPENSEARCH_ROOTPASSWORD}" | tail -n 1)
+      KIBANA_HASH=$$(/usr/share/opensearch/plugins/opensearch-security/tools/hash.sh -p "$${DASHBOARDS_ROOTPASSWORD}" | tail -n 1)
+
+      echo "Overwriting internal_users.yml..."
+      
+      cat <<EOF > /usr/share/opensearch/config/opensearch-security/internal_users.yml
+      ---
+      _meta:
+        type: "internalusers"
+        config_version: 2
+
+      ${OPENSEARCH_ROOTUSER}:
+        hash: "$${ADMIN_HASH}"
+        reserved: true
+        backend_roles:
+        - "admin"
+        description: "Admin user"
+
+      kibanaserver:
+        hash: "$${KIBANA_HASH}"
+        reserved: true
+        description: "OpenSearch Dashboards user"
+      EOF
+
+      echo "Secure internal_users.yml generated successfully."
+      echo "============================================================"
+
+      exec /usr/share/opensearch/opensearch-docker-entrypoint.sh opensearch
+      '
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:3.5.0
+    container_name: opensearch-dashboards
+    env_file:
+      - .env
+    environment:
+      - OPENSEARCH_HOSTS=${OPENSEARCH_HOST}
+      - OPENSEARCH_USERNAME=${DASHBOARDS_ROOTUSER}
+      - OPENSEARCH_PASSWORD=${DASHBOARDS_ROOTPASSWORD}
+      - OPENSEARCH_SSL_VERIFICATIONMODE=none
+    ports:
+      - "5601:5601"
+    networks:
+      - osnet
+    depends_on:
+      - opensearch
+
+  setup:
+    image: curlimages/curl:latest
+    container_name: opensearch-setup
+    env_file:
+      - .env
+    entrypoint: >
+        sh -c '
+          until curl -ks -u ${OPENSEARCH_ROOTUSER}:${OPENSEARCH_ROOTPASSWORD} ${OPENSEARCH_HOST}/_plugins/_security/whoami | grep -q "admin"; do
+            echo "Waiting for OpenSearch to become ready..." && sleep 5;
+          done
+
+          echo ""
+          echo "============================================================"
+          echo "Creating custom production role for user OPENSEARCH_USER=${OPENSEARCH_USER} ..."
+          curl -ks -X PUT -u ${OPENSEARCH_ROOTUSER}:${OPENSEARCH_ROOTPASSWORD} \
+            -H "Content-Type: application/json" \
+            "${OPENSEARCH_HOST}/_plugins/_security/api/roles/prod_role" \
+            -d "{\"cluster_permissions\": [\"cluster_monitor\"], \"index_permissions\": [{\"index_patterns\": [\"*\"], \"allowed_actions\": [\"*\"]}]}"
+
+          echo ""
+          echo "============================================================"
+          echo "Creating user OPENSEARCH_USER=${OPENSEARCH_USER} ..."
+          curl -ks -X PUT -u ${OPENSEARCH_ROOTUSER}:${OPENSEARCH_ROOTPASSWORD} \
+            -H "Content-Type: application/json" \
+            "${OPENSEARCH_HOST}/_plugins/_security/api/internalusers/${OPENSEARCH_USER}" \
+            -d "{\"password\": \"${OPENSEARCH_PASSWORD}\"}"
+
+          echo ""
+          echo "============================================================"
+          echo "Mapping DB and dashboards roles to user OPENSEARCH_USER=${OPENSEARCH_USER} ..."
+          curl -ks -X PUT -u ${OPENSEARCH_ROOTUSER}:${OPENSEARCH_ROOTPASSWORD} \
+            -H "Content-Type: application/json" \
+            "${OPENSEARCH_HOST}/_plugins/_security/api/rolesmapping/prod_role" \
+            -d "{\"users\": [\"${OPENSEARCH_USER}\"]}"
+          
+          echo ""
+          curl -ks -X PUT -u ${OPENSEARCH_ROOTUSER}:${OPENSEARCH_ROOTPASSWORD} \
+            -H "Content-Type: application/json" \
+            "${OPENSEARCH_HOST}/_plugins/_security/api/rolesmapping/kibana_user" \
+            -d "{\"users\": [\"${OPENSEARCH_USER}\"]}"
+          
+          echo ""
+          echo "============================================================"
+          echo "Setup complete."
+        '
+    networks:
+      - osnet
+    depends_on:
+      - opensearch
+
+volumes:
+  osdata:
+    driver: local
+
+networks:
+  osnet:
+    driver: bridge

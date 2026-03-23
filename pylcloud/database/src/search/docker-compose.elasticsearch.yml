@@ -1,0 +1,86 @@
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.3.2
+    container_name: es01
+    env_file:
+      - .env
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - ELASTIC_PASSWORD=${ELASTICSEARCH_ROOTPASSWORD}
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    networks:
+      - esnet
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:9.3.2
+    container_name: kibana
+    env_file:
+      - .env
+    environment:
+      - ELASTICSEARCH_HOSTS=${ELASTICSEARCH_HOST}
+      - ELASTICSEARCH_USERNAME=${KIBANA_ROOTUSER}
+      - ELASTICSEARCH_PASSWORD=${KIBANA_ROOTPASSWORD}
+      - ELASTICSEARCH_SSL_VERIFICATIONMODE=none
+    ports:
+      - "5601:5601"
+    networks:
+      - esnet
+    depends_on:
+      - elasticsearch
+      
+  setup:
+    image: curlimages/curl:latest
+    container_name: elastic-setup
+    env_file:
+      - .env
+    entrypoint: >
+        sh -c '
+          until curl -ks -u ${ELASTICSEARCH_ROOTUSER}:${ELASTICSEARCH_ROOTPASSWORD} ${ELASTICSEARCH_HOST}/_security/_authenticate | grep -q username; do
+            echo "Waiting for Elasticsearch security API to be ready..." && sleep 5;
+          done
+
+          echo ""
+          echo "============================================================"
+          echo "Configuring built-in user KIBANA_ROOTUSER=${KIBANA_ROOTUSER} ...";
+          curl -ks -X POST -u ${ELASTICSEARCH_ROOTUSER}:${ELASTICSEARCH_ROOTPASSWORD} \
+            -H "Content-Type: application/json" \
+            "${ELASTICSEARCH_HOST}/_security/user/${KIBANA_ROOTUSER}/_password" \
+            -d "{\"password\": \"${KIBANA_ROOTPASSWORD}\"}"
+
+          echo ""
+          echo "============================================================"
+          echo "Creating custom production role for user ELASTICSEARCH_USER=${ELASTICSEARCH_USER} ...";
+          curl -ks -X POST -u ${ELASTICSEARCH_ROOTUSER}:${ELASTICSEARCH_ROOTPASSWORD} \
+            -H "Content-Type: application/json" \
+            "${ELASTICSEARCH_HOST}/_security/role/prod_role" \
+            -d "{\"cluster\": [\"monitor\"], \"indices\": [{\"names\": [\"*\"], \"privileges\": [\"all\"], \"allow_restricted_indices\": false}]}"
+
+          echo ""
+          echo "============================================================"
+          echo "Creating prod user ELASTICSEARCH_USER=${ELASTICSEARCH_USER} ...";
+          curl -ks -X POST -u ${ELASTICSEARCH_ROOTUSER}:${ELASTICSEARCH_ROOTPASSWORD} \
+            -H "Content-Type: application/json" \
+            "${ELASTICSEARCH_HOST}/_security/user/${ELASTICSEARCH_USER}" \
+            -d "{\"password\": \"${ELASTICSEARCH_PASSWORD}\", \"roles\": [\"prod_role\", \"kibana_admin\"]}"
+
+          echo ""
+          echo "============================================================"
+          echo -e "Setup complete."
+        '
+    networks:
+      - esnet
+    depends_on:
+      - elasticsearch
+
+volumes:
+  esdata:
+    driver: local
+
+networks:
+  esnet:
+    driver: bridge
