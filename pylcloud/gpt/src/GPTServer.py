@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from uuid import uuid4
-from typing import List, Union, Any
+from typing import List, Union, Any, Callable
 from collections.abc import Sequence
 from io import BytesIO
 import requests
@@ -85,3 +85,31 @@ class GPTServer(GPT):
         dimensions: int = 512,
     ) -> dict | dict[str, str | int]:
         raise NotImplementedError
+
+    def return_agent(
+        self,
+        model_name: str,
+        user_prompt: str,
+        tools: List[dict[str, Any]],
+        tool_handler: Callable[..., Any],
+        system_prompt: str = "",
+        messages: List[dict[str, Any]] = ...,
+        max_tokens: int = 1024,
+        temperature: float = 0.9,
+        top_k: int = 32,
+        top_p: float = 0.7,
+        max_iterations: int = 10,
+    ) -> dict[str, Any]:
+        return super().return_agent(
+            model_name,
+            user_prompt,
+            tools,
+            tool_handler,
+            system_prompt,
+            messages,
+            max_tokens,
+            temperature,
+            top_k,
+            top_p,
+            max_iterations,
+        )

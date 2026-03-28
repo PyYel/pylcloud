@@ -168,3 +168,4 @@ cython_debug/
 tmp/*
 !requirements.txt
 *.txt
+agent.json
