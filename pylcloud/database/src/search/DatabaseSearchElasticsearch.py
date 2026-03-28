@@ -48,7 +48,7 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
         to an Elasticsearch DB, you are directly connected to the cluster. To change of cluster, you should 'reconnect' to the server.
         In the Elasticsearch context, this is more obvious, as two clusters must always be hosted on different ports.
         """
-        super().__init__(logs_name="DatabaseElasticsearch")
+        super().__init__()
 
         self.host = host
         self.user = user
