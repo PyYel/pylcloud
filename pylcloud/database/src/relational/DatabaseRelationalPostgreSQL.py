@@ -359,10 +359,12 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             else:
                 self.logger.warning(f"Failed to create table '{self.schema}.{table_name}'.")
                 self._rollback()
+                raise
 
         except Exception as e:
             self._rollback()
             self.logger.error(f"Error creating table '{table_name}': {e}")
+            raise
 
     def drop_table(self, table_name: str) -> None:
         """Drop a table (CASCADE) from the current schema."""
@@ -382,6 +384,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         except Exception as e:
             self._rollback()
             self.logger.error(f"Failed to drop table '{table_name}': {e}")
+            raise
 
     def drop_schema(self, schema: str) -> None:
         """Drop a schema (CASCADE) from the current database."""
@@ -400,6 +403,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         except Exception as e:
             self._rollback()
             self.logger.error(f"Error dropping schema '{schema}': {e}")
+            raise
 
     def describe_database(self) -> list:
         """Return the non-system schemas of the connected database."""
@@ -415,7 +419,10 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
                 cur.execute(
                     "SELECT datname FROM pg_database WHERE datistemplate = false ORDER BY datname;"
                 )
-                databases = [row[0] for row in cur.fetchall()]
+                if cur.description is not None:
+                    databases = [row[0] for row in cur.fetchall()]
+                else:
+                    databases = []
 
             if display:
                 print("Available databases:", databases)
@@ -424,7 +431,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
 
         except Exception as e:
             self.logger.error(f"Error listing databases: {e}")
-            return []
+            raise
 
     def list_schemas(
         self, include_system_schemas: bool = False, display: bool = False
@@ -455,7 +462,10 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
                         "   AND schema_name <> 'information_schema'"
                         " ORDER BY schema_name;"
                     )
-                schemas = [row[0] for row in cur.fetchall()]
+                if cur.description is not None:
+                    schemas = [row[0] for row in cur.fetchall()]
+                else:
+                    schemas = []
 
             if display:
                 print("Schemas in database:", schemas)
@@ -464,7 +474,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
 
         except Exception as e:
             self.logger.error(f"Error listing schemas: {e}")
-            return []
+            raise
 
     def list_tables(self, display: bool = False) -> list[str]:
         """List all tables in the current schema.
@@ -500,7 +510,10 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
                     " WHERE table_schema = %s ORDER BY table_name;",
                     (self.schema,),
                 )
-                tables = [row[0] for row in cur.fetchall()]
+                if cur.description is not None:
+                    tables = [row[0] for row in cur.fetchall()]
+                else:
+                    tables = []
 
             if display:
                 if tables:
@@ -512,7 +525,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
 
         except Exception as e:
             self.logger.error(f"Error listing tables: {e}")
-            return []
+            raise
 
     def query_data(
         self,
@@ -522,7 +535,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         WHERE: Optional[Union[str, list[str]]] = None,
         VALUES: Optional[Union[Any, list[Any]]] = None,
         LIKE: Optional[Union[str, list[str]]] = None,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """
         Select rows from a PostgreSQL table with optional JOIN and WHERE filtering.
 
@@ -607,10 +620,10 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
 
         except psycopg.Error as e:
             self.logger.error(f"PostgreSQL error during SELECT: {e}")
-            return []
+            raise
         except Exception as e:
             self.logger.error(f"Unexpected error during SELECT: {e}")
-            return []
+            raise
 
     def send_data(self, table_name: str, **kwargs: Any) -> None:
         """
@@ -660,6 +673,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         except Exception as e:
             self._rollback()
             self.logger.error(f"Error inserting data into '{table_name}': {e}")
+            raise
 
     def update_data(
         self,
@@ -759,6 +773,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         except Exception as e:
             self._rollback()
             self.logger.error(f"Error updating data in '{table_name}': {e}")
+            raise
 
     def delete_data(
         self,
@@ -817,7 +832,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
                 patterns = [LIKE] if not isinstance(LIKE, (list, tuple)) else list(LIKE)
                 if len(where_cols) != len(patterns):
                     self.logger.warning("WHERE columns and LIKE patterns count mismatch.")
-                    return
+                    raise
                 where_composable = sql.SQL(" AND ").join(
                     sql.SQL("{col} LIKE %s").format(col=self._col_to_identifier(col))
                     for col in where_cols
@@ -826,7 +841,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
 
             else:
                 self.logger.warning("Either VALUES or LIKE must be provided for DELETE.")
-                return
+                raise
 
             # Resolve table identifier
             parts = FROM.split(".", 1)
@@ -852,6 +867,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         except Exception as e:
             self._rollback()
             self.logger.error(f"Error deleting data from '{FROM}': {e}")
+            raise
 
     def raw_sql(
         self, SQL: str, VALUES: Optional[tuple] = None
@@ -890,7 +906,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
 
         except Exception as e:
             self.logger.critical(f"Raw SQL failed: {e}")
-            return []
+            raise
     
     def execute_file(self, file_path: str) -> None:
         """
