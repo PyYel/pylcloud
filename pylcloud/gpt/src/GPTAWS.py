@@ -491,15 +491,8 @@ class GPTAWS(GPT):
                         "output_tokens": meta_usage.get("outputTokens", 0),
                     }
 
-            print(text)
-            print(response["stream"])
-
             # Parse thinking from the fully accumulated text at the end
             thinking, text = self.parse_model_output(text)
-            usage = {
-                "input_tokens": response["usage"]["inputTokens"],
-                "output_tokens": response["usage"]["outputTokens"],
-            }
 
             yield {"thinking": thinking, "text": text, "usage": usage}
 

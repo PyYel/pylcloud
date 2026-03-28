@@ -126,8 +126,8 @@ pprint.pprint(result)
 
 import json
 with open(os.path.join(os.path.dirname(__file__), "agent.json"), "w") as f:
-    json.dump(result, f, indent=4)
-    
+    json.dump(details['messages'], f, indent=4)
+
 print(f"Iterations: {details['iterations']}")
 print(f"Usage: {result['usage']}")
 print(f"Cost: {api.compute_costs(model_name=model_name, usage=result['usage'])}")
