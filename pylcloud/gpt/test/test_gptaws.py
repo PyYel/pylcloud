@@ -20,23 +20,24 @@ api = GPTAWS(
 
 # EMBEDDING
 print("\n==================================\nEMBEDDING")
-reponse = api.return_embedding(model_name="titan-text-embeddings", prompt="test", dimensions=256)
-pprint.pprint(reponse)
+response = api.return_embedding(model_name="titan-text-embeddings", prompt="test", dimensions=256)
+pprint.pprint(response, depth=1)
 
 
 # SIMPLE GENERATION CALL
 print("\n==================================\nRETURN")
-reponse = api.return_generation(model_name="nova-lite", user_prompt="test")
-pprint.pprint(reponse)
+response = api.return_generation(model_name="nova-2-lite", user_prompt="test", thinking_allowed=True, thinking_effort="medium")
+pprint.pprint(response)
 
 
 # STREAMING GENERATION CALL
 print("\n==================================\nSTREAMING")
-for chunk in api.yield_generation(model_name="nova-lite", user_prompt="test"):
+for chunk in api.yield_generation(model_name="nova-pro", user_prompt="test", thinking_allowed=True):
     print(chunk)
-    reponse = chunk
-pprint.pprint(reponse)
-print(api.compute_costs(model_name="nova-lite", usage=reponse["usage"]))
+    response = chunk
+pprint.pprint(response)
+if response:
+    print(api.compute_costs(model_name="nova-lite", usage=response["usage"]))
 
 
 # AGENT LOOP: dummy RAG example
@@ -124,10 +125,12 @@ result, details = api.return_agent(
 
 pprint.pprint(result)
 
-import json
-with open(os.path.join(os.path.dirname(__file__), "agent.json"), "w") as f:
-    json.dump(details['messages'], f, indent=4)
+if result and details:
 
-print(f"Iterations: {details['iterations']}")
-print(f"Usage: {result['usage']}")
-print(f"Cost: {api.compute_costs(model_name=model_name, usage=result['usage'])}")
+    import json
+    with open(os.path.join(os.path.dirname(__file__), "agent.json"), "w") as f:
+        json.dump(details['history'], f, indent=4)
+
+    print(f"Iterations: {details['iterations']}")
+    print(f"Usage: {result['usage']}")
+    print(f"Cost: {api.compute_costs(model_name=model_name, usage=result['usage'])}")

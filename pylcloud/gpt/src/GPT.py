@@ -2,7 +2,7 @@ import os, sys
 from abc import ABC, abstractmethod
 from uuid import uuid4
 from collections import Counter
-from typing import Optional, Union, List, Dict, Any, TypedDict, Callable
+from typing import Optional, Union, List, Dict, Any, TypedDict, Callable, Generator, Literal
 from io import BytesIO
 import nltk
 from nltk.data import find
@@ -12,12 +12,14 @@ import re
 
 from pylcloud import _config_logger
 
-class GPTResponse(TypedDict):
+class GPTMessage(TypedDict):
     """
     Standardized PyYel LLM inference output.
 
     Parameters
     ==========
+    - model_name: str
+        The model used for inference
     - thinking: str, optional
         The model thinking tokens, removed from the ``text`` output. None if the model did not think
     - text: str
@@ -25,9 +27,45 @@ class GPTResponse(TypedDict):
     - usage: dict[str, int]
         The input and output tokens count
     """
+    model_name: str
     thinking: Optional[str] 
     text: str
     usage: dict[str, int]
+
+
+class GPTEmbedding(TypedDict):
+    """
+    Standardized PyYel Embedding inference output.
+
+    Parameters
+    ==========
+    - model_name: str
+        The model used for inference
+    - embedding: list[float]
+        The embedded prompt, i.e. a vector
+    - usage: dict[str, int]
+        The input and output tokens count (output is a fixed value equal to 0)
+    """
+    model_name: str
+    embedding: List[float]
+    usage: dict[str, int]
+
+
+class GPTAgentDetails(TypedDict):
+    """
+    Agent execution metadata.
+
+    Parameters
+    ==========
+    - iterations: int
+        The number of back and forth iterations between the agent and the tools made before answering the query.
+    - history: dict[str, str]
+        The messages exchanged between the tools suite and the LLM.
+        {'role': Literal['user', 'assistant'], 'content': str}
+    """
+    iterations: int
+    history: List[dict[str, str]]
+    stop_reason: Literal["done", "max_tokens", "unexpected"]
 
 
 class GPT(ABC):
@@ -94,7 +132,7 @@ class GPT(ABC):
         model_name: str,
         prompt: str,
         dimensions: int = 512,
-    ) -> Union[dict, dict[str, Union[str, int]]]:
+    ) -> Optional[GPTEmbedding]:
         raise NotImplementedError
 
     @abstractmethod
@@ -108,7 +146,10 @@ class GPT(ABC):
         max_tokens: int = 512,
         temperature: float = 0.9,
         top_p: float = 0.7,
-    ):
+        thinking_allowed: Optional[bool] = None,
+        thinking_budget: int = 8000,
+        thinking_effort: Literal["low", "medium", "high"] = "low",
+    ) -> Optional[GPTMessage]:
         raise NotImplementedError
 
     @abstractmethod
@@ -122,7 +163,10 @@ class GPT(ABC):
         max_tokens: int = 512,
         temperature: float = 0.9,
         top_p: float = 0.7,
-    ):
+        thinking_allowed: Optional[bool] = None,
+        thinking_budget: int = 8000,
+        thinking_effort: Literal["low", "medium", "high"] = "low",
+    ) -> Generator[Optional[GPTMessage]]:
         raise NotImplementedError
 
     @abstractmethod
@@ -139,9 +183,9 @@ class GPT(ABC):
         top_p: float = 0.7,
         thinking_allowed: Optional[bool] = None,
         thinking_budget: int = 4000,
-        thinking_effort: str = "low",
+        thinking_effort: Literal["low", "medium", "high"] = "low",
         max_iterations: int = 10,
-    ) -> tuple[Union[GPTResponse, dict], dict]:
+    ) -> tuple[Optional[GPTMessage], Optional[GPTAgentDetails]]:
         raise NotImplementedError
 
     def generate_title(self, conversation: str):

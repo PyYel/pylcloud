@@ -5,45 +5,19 @@ import base64
 import os
 import sys
 from io import BytesIO
-from typing import List, Union, Any, Callable, Optional, TypedDict
+from typing import List, Union, Any, Callable, Optional, TypedDict, Literal
 from collections.abc import Generator
 from uuid import uuid4
 
 import boto3
 
-from .GPT import GPT, GPTResponse
+from .GPT import GPT, GPTMessage, GPTEmbedding, GPTAgentDetails
 from pylcloud import _config_logger
 
 
 class GPTAWS(GPT):
     """
     Helper that simplifies calls to AWS Bedrock LLM and embedding models.
-
-    All generative calls (non-streaming, streaming, agentic) use the Bedrock
-    Converse API, which provides a unified request/response format across all
-    supported model families (Claude, Nova, etc.) and natively handles tool use.
-
-    Embedding calls use invoke_model, as the Converse API does not support
-    encoder-only models.
-
-    Thinking behaviour
-    ------------------
-    All generative methods accept a ``thinking`` parameter:
-    - ``None``: let the model decide (Nova default, Claude off)
-    - ``True``: force thinking on
-    - ``False``: force thinking off (Nova only, no-op for Claude)
-
-    All generative methods return a ``ModelOutput`` dict with keys
-    ``"thinking"`` (str | None) and ``"text"`` (str), parsed transparently
-    regardless of model family. The ``"thinking"`` field is ``None`` when the
-    model did not produce a reasoning trace.
-
-    Thinking capability per model
-    ------------------------------
-    - nova-pro, nova-lite : think autonomously; can be forced on/off
-    - claude-4-sonnet     : does not think by default; can be forced on
-    - nova-micro          : no thinking support
-    - claude-3-haiku      : no thinking support
     """
 
     def __init__(
@@ -75,10 +49,11 @@ class GPTAWS(GPT):
 
         Thinking capability per model
         ------------------------------
-        - nova-pro, nova-lite : think autonomously; can be forced on/off
-        - claude-4-sonnet     : does not think by default; can be forced on
-        - nova-micro          : no thinking support
-        - claude-3-haiku      : no thinking support
+        In most low-level cases, thinking is not needed, and would otherwise be very costly.
+        - nova-pro, nova-lite: think autonomously; can be forced on/off
+        - claude-4-sonnet: does not think by default; can be forced on
+        - nova-micro: no thinking support
+        - claude-3-haiku: no thinking support
         """
         super().__init__()
 
@@ -129,6 +104,14 @@ class GPTAWS(GPT):
                     if self.AWS_REGION_NAME.startswith("eu")
                     else "amazon.nova-lite-v1:0"
                 ),
+                "thinking": False,
+            },
+            "nova-2-lite": {
+                "model_id": (
+                    "eu.amazon.nova-2-lite-v1:0"
+                    if self.AWS_REGION_NAME.startswith("eu")
+                    else "amazon.nova-2-lite-v1:0"
+                ),
                 "thinking": True,
             },
             "nova-pro": {
@@ -137,7 +120,7 @@ class GPTAWS(GPT):
                     if self.AWS_REGION_NAME.startswith("eu")
                     else "amazon.nova-pro-v1:0"
                 ),
-                "thinking": True,
+                "thinking": False,
             },
         }
 
@@ -173,6 +156,10 @@ class GPTAWS(GPT):
                 "input_tokens": 0.000088 * 1e-3,
                 "output_tokens": 0.000352 * 1e-3,
             },
+            "nova-2-lite": {
+                "input_tokens": 0.484 * 1e-6,
+                "output_tokens": 4.059 * 1e-6,
+            },
             "nova-pro": {
                 "input_tokens": 0.00118 * 1e-3,
                 "output_tokens": 0.00472 * 1e-3,
@@ -187,12 +174,15 @@ class GPTAWS(GPT):
             },
         }
 
+        return None
+
+
     def return_embedding(
         self,
         model_name: str,
         prompt: str,
         dimensions: int = 256,
-    ) -> dict[str, Union[list[float], dict[str, int]]]:
+    ) -> Optional[GPTEmbedding]:
         """
         Generate a vector embedding for the given text using an encoder model.
 
@@ -257,6 +247,7 @@ class GPTAWS(GPT):
             body = json.loads(response["body"].read())
 
             return {
+                "model_name": model_name,
                 "embedding": body["embedding"],
                 "usage": {
                     "input_tokens": body["inputTextTokenCount"],
@@ -266,7 +257,8 @@ class GPTAWS(GPT):
 
         except Exception as e:
             self.logger.error(e)
-            return {}
+            return None
+
 
     def return_generation(
         self,
@@ -280,8 +272,8 @@ class GPTAWS(GPT):
         top_p: float = 0.7,
         thinking_allowed: Optional[bool] = None,
         thinking_budget: int = 8000,
-        thinking_effort: str = "low",
-    ) -> Union[GPTResponse, dict]:
+        thinking_effort: Literal["low", "medium", "high"] = "low",
+    ) -> Optional[GPTMessage]:
         """
         Single-turn (non-streaming) text generation.
 
@@ -329,6 +321,9 @@ class GPTAWS(GPT):
             - "text": str
             - "usage": {"input_tokens": int, "output_tokens": int}
 
+        Raises
+        ------
+
         Examples
         --------
         >>> result = gpt.return_generation("nova-lite", user_prompt="Who are you?")
@@ -365,11 +360,14 @@ class GPTAWS(GPT):
                 "output_tokens": response["usage"]["outputTokens"],
             }
 
-            return {"thinking": thinking, "text": text, "usage": usage}
+            gpt_message: GPTMessage = {"model_name": model_name, "thinking": thinking, "text": text, "usage": usage}
+
+            return gpt_message
 
         except Exception as e:
             self.logger.error(e)
-            return {}
+            return None
+
 
     def yield_generation(
         self,
@@ -382,8 +380,9 @@ class GPTAWS(GPT):
         temperature: float = 0.9,
         top_p: float = 0.7,
         thinking_allowed: Optional[bool] = None,
-        thinking_effort: str = "low",
-    ) -> Generator[Union[GPTResponse, dict]]:
+        thinking_budget: int = 8000,
+        thinking_effort: Literal["low", "medium", "high"] = "low",
+    ) -> Generator[Optional[GPTMessage]]:
         """
         Streaming text generation.
 
@@ -466,6 +465,7 @@ class GPTAWS(GPT):
                 temperature=temperature,
                 top_p=top_p,
                 thinking_allowed=thinking_allowed,
+                thinking_budget=thinking_budget,
                 thinking_effort=thinking_effort,
             )
 
@@ -494,11 +494,14 @@ class GPTAWS(GPT):
             # Parse thinking from the fully accumulated text at the end
             thinking, text = self.parse_model_output(text)
 
-            yield {"thinking": thinking, "text": text, "usage": usage}
+            gpt_message: GPTMessage = {"model_name": model_name, "thinking": thinking, "text": text, "usage": usage}
+
+            yield gpt_message
 
         except Exception as e:
             self.logger.error(e)
-            yield {}
+            yield None
+
 
     def return_agent(
         self,
@@ -513,9 +516,9 @@ class GPTAWS(GPT):
         top_p: float = 0.7,
         thinking_allowed: Optional[bool] = None,
         thinking_budget: int = 4000,
-        thinking_effort: str = "low",
+        thinking_effort: Literal["low", "medium", "high"] = "low",
         max_iterations: int = 10,
-    ) -> tuple[Union[GPTResponse, dict], dict]:
+    ) -> tuple[Optional[GPTMessage], Optional[GPTAgentDetails]]:
         """
         Agentic generation loop via the Converse API with tool use.
 
@@ -579,12 +582,15 @@ class GPTAWS(GPT):
 
         Returns
         -------
-        dict with keys:
+        tuple of dict with keys:
+        - GPTMessage:
             - "thinking": str | None, reasoning trace from the final answer turn
             - "text": str, the model's final text answer
             - "usage": {"input_tokens": int, "output_tokens": int}, cumulative across all inference calls in the loop
+        - GPTAgentDetails:
             - "iterations": int, number of tool-call rounds executed
-            - "messages": list, full raw conversation history (never filtered)
+            - "stop_reason": Literal['done', 'max_tokens', 'unexpected'], why did the agent stopped 
+            - "history": list[dict[str, str]], unfiltered tool-llm conversation history (with thinking beacons, inner dialog...)
 
         Examples
         --------
@@ -593,17 +599,23 @@ class GPTAWS(GPT):
         ...         return search_vector_store(inputs["query"])
         ...     return "Unknown tool"
 
-        >>> result = gpt.return_agent(
+        >>> llm_final_response, agent_exec_details = gpt.return_agent(
         ...     model_name="claude-4-sonnet",
         ...     user_prompt="Find documents about solar panels.",
         ...     tools=TOOLS_SPEC,
         ...     tool_handler=my_handler,
         ...     system_prompt="You are a helpful assistant.",
         ... )
-        >>> print(result["text"])
-        >>> print(result["thinking"])    # None if model did not think
-        >>> print(result["usage"])       # total cost across all rounds
-        >>> print(result["iterations"])  # how many tool calls were made
+
+        >>> print(llm_final_response["text"])           # User intended response
+        >>> print(llm_final_response["thinking"])       # None if model did not think
+        >>> print(result["usage"])                      # total cost across all rounds
+        ... {}
+        >>> print(agent_exec_details["iterations"])  # how many tool calls were made
+        ... 5
+        >>> print(agent_exec_details["iterations"])  # how many tool calls were made
+        ... 
+        >>> print(agent_exec_details["history"])        # Inner dialog
         """
         try:
             # Append user turn to history
@@ -644,7 +656,11 @@ class GPTAWS(GPT):
                 if stop_reason == "end_turn":
                     raw_text = next((b["text"] for b in raw_content if "text" in b), "")
                     thinking, text = self.parse_model_output(raw_text, raw_content)
-                    return {"thinking": thinking, "text": text, "usage": total_usage}, {"iterations": iterations,"messages": history}
+
+                    gpt_message: GPTMessage = {"model_name": model_name, "thinking": thinking, "text": text, "usage": total_usage}
+                    gpt_agent_details: GPTAgentDetails = {"iterations": iterations, "history": history, "stop_reason": "done"}
+
+                    return gpt_message, gpt_agent_details
 
                 # Tool call round
                 elif stop_reason == "tool_use":
@@ -697,7 +713,11 @@ class GPTAWS(GPT):
                     )
                     raw_text = next((b["text"] for b in raw_content if "text" in b), "")
                     thinking, text = self.parse_model_output(raw_text, raw_content)
-                    return {"thinking": thinking, "text": text, "usage": total_usage}, {"iterations": iterations,"messages": history}
+
+                    gpt_message: GPTMessage = {"model_name": model_name, "thinking": thinking, "text": text, "usage": total_usage}
+                    gpt_agent_details: GPTAgentDetails = {"iterations": iterations, "history": history, "stop_reason": "max_tokens"}
+
+                    return gpt_message, gpt_agent_details
 
                 else:
                     self.logger.warning(f"Unexpected stop_reason: '{stop_reason}'.")
@@ -707,38 +727,17 @@ class GPTAWS(GPT):
             self.logger.warning(
                 f"Agent reached max_iterations ({max_iterations}) without finishing."
             )
-            return {"thinking": None, "text": "", "usage": total_usage}, {"iterations": iterations,"messages": history}
+
+
+            gpt_message: GPTMessage = {"model_name": model_name, "thinking": None, "text": "", "usage": total_usage}
+            gpt_agent_details: GPTAgentDetails = {"iterations": iterations, "history": history, "stop_reason": "unexpected"}
+
+            return gpt_message, gpt_agent_details
 
         except Exception as e:
             self.logger.error(e)
-            return {}, {}
+            return None, None
 
-    def compute_costs(self, model_name: str, usage: dict[str, int]) -> dict[str, float]:
-        """
-        Compute the dollar cost of an inference call given its token usage.
-
-        Parameters
-        ----------
-        model_name: str
-            Model key as used in this class.
-        usage: dict
-            {"input_tokens": int, "output_tokens": int}
-
-        Returns
-        -------
-        dict with keys:
-            - "input_cost" : float
-            - "output_cost": float
-            - "total_cost" : float
-        """
-        rates = self.costs.get(model_name, {})
-        input_cost = usage.get("input_tokens", 0) * rates.get("input_tokens", 0)
-        output_cost = usage.get("output_tokens", 0) * rates.get("output_tokens", 0)
-        return {
-            "input_cost": input_cost,
-            "output_cost": output_cost,
-            "total_cost": input_cost + output_cost,
-        }
 
     def _build_converse_request(
         self,
@@ -751,16 +750,15 @@ class GPTAWS(GPT):
         top_p: float = 0.7,
         thinking_allowed: Optional[bool] = None,
         thinking_budget: int = 8000,
-        thinking_effort: str = "low",
+        thinking_effort: Literal["low", "medium", "high"] = "low",
     ) -> dict[str, Any]:
         """
         Build a Converse (or converse_stream) request dict.
 
         Notes
         -----
-        - thinking_allowed=True on Claude forces temperature=1 as required by the API.
-        - thinking_allowed is silently ignored for models that do not support it
-          (nova-micro, claude-3-haiku).
+        - thinking_allowed can be used to explicitely allow of forbid thinking (extended thinking)
+        - thinking_allowed is silently ignored for models that do not support it (they may still use latent reasoning)
         """
         if model_name not in self.generative_models:
             raise ValueError(
@@ -789,21 +787,19 @@ class GPTAWS(GPT):
 
         if thinking_allowed is not None and not model_supports_thinking:
             self.logger.warning(
-                f"Model '{model_name}' does not support thinking. Ignoring thinking parameter."
+                f"Model '{model_name}' does not support thinking. Ignoring thinking parameters."
             )
 
         elif thinking_allowed is not None and model_supports_thinking:
-            if "nova" in model_name:
+            request["inferenceConfig"] = {} # Enforce default API settings
+            if "nova-2" in model_name:
                 request["additionalModelRequestFields"] = {
-                    "reasoningConfig": {
-                        "type": "enabled" if thinking_allowed else "disabled",
-                        **({"maxReasoningEffort": thinking_effort} if thinking_allowed else {}),
+                        "reasoningConfig": {
+                            "type": "enabled" if thinking_allowed else "disabled",
+                            "maxReasoningEffort": thinking_effort 
+                        }
                     }
-                }
             elif "claude" in model_name and thinking_allowed:
-                # Claude requires temperature=1 when extended thinking is enabled.
-                # Claude thinking=False: omitting the field is equivalent to disabled.
-                request["inferenceConfig"]["temperature"] = 1
                 request["additionalModelRequestFields"] = {
                     "reasoningConfig": {
                         "type": "enabled",
@@ -811,6 +807,8 @@ class GPTAWS(GPT):
                         "budgetTokens": min(thinking_budget, max_tokens - 1),
                     }
                 }
+
+        self.logger.debug(request)
 
         return request
 
