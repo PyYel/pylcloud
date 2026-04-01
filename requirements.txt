@@ -4,10 +4,11 @@ tqdm
 elasticsearch
 fastapi
 uvicorn
-psycopg>=3.1
+psycopg[binary]>=3.1
 opensearch-py 
 requests-aws4auth
 nltk
+botocore[crt]
 
 # For testing
 python-dotenv==1.0.1

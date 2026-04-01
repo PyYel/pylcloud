@@ -25,6 +25,7 @@ all = ["pylcloud[database,storage,gpt]"]
 database = [
     "mysql-connector-python", 
     "psycopg[binary]>=3.1",
+    "botocore[crt]",
     "boto3", 
     "elasticsearch", 
     "opensearch-py"
