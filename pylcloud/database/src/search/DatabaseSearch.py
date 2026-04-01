@@ -60,6 +60,8 @@ class DatabaseSearch(Database):
         must_pairs: list[dict[str, str]] = [],
         should_pairs: list[dict[str, str]] = [],
         k: int = 5,
+        *args,
+        **kwargs
     ):
         raise NotImplementedError
 

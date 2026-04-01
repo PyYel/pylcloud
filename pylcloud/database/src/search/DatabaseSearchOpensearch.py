@@ -15,7 +15,7 @@ warnings.filterwarnings(
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 from .DatabaseSearch import DatabaseSearch
-from pylcloud import _config_logger
+from pylcloud import _config_logger # type: ignore
 
 
 class DatabaseSearchOpensearch(DatabaseSearch):
