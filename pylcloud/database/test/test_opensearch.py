@@ -1,6 +1,9 @@
 import os, sys
-
+from dotenv import load_dotenv
 import ssl
+import random
+import time
+import pprint
 
 # ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -10,29 +13,62 @@ if __name__ == "__main__":
 
 from database import DatabaseSearchOpensearch
 
-# Test import and init
-api_os = DatabaseSearchOpensearch(host="http://localhost:9200")
+load_dotenv(os.path.join(DATABASE_DIR_PATH, "src", "search", ".env"))
 
-# api_os.drop_index(index_name="test")
+
+# Read write prod user
+api_os = DatabaseSearchOpensearch(
+    host="https://localhost:9200",
+    user=os.getenv("OPENSEARCH_USER", ""),
+    password=os.getenv("OPENSEARCH_PASSWORD", ""),
+)
+
+api_os.drop_index(index_name="test")
+api_os.drop_index(index_name="test")
+api_os.drop_index(index_name="test-vect")
+
 
 api_os.create_index(
     index_name="test",
-    properties={"name": {"type": "keyword"}, "age": {"type": "float"}},
+    mappings={"name": {"type": "keyword"}, "age": {"type": "float"}},
 )
 
 indexes = api_os.list_indexes()
 
-if indexes:
 
-    api_os.send_data(index_name="test", documents=[{"name": "john1", "age": 10}])
-    print([response["_source"] for response in api_os.query_data(index_name="test")])
+api_os.send_data(index_name="test", documents=[{"name": "john1", "age": 10}, {"name": "john2", "age": 20}])
 
-    api_os.delete_data(index_name="test", pairs={"name": "john2"})
-    print(
-        [
-            response["_source"]
-            for response in api_os.query_data(
-                index_name="test", must_pairs=[{"name": "john2"}]
-            )
-        ]
-    )
+api_os.delete_data(index_name="test", pairs={"name": "john1"})
+
+time.sleep(1) # time for os indexing
+print([response["_source"] for response in api_os.query_data(index_name="test")])
+
+
+api_os.create_index(
+    index_name="test-vect",
+    settings={
+        "index": {
+            "knn": True
+        }
+    },
+    mappings={
+        "name": {"type": "keyword"}, 
+        "vector": {
+            "type": "knn_vector",
+            "dimension": 256,
+        },
+    }
+)
+
+
+test_vect = [random.random() for k in range(256)]
+
+api_os.send_data(index_name="test-vect", documents=[{"name": "john1", "vector": test_vect}])
+
+time.sleep(1)
+results = api_os.similarity_search(
+    index_name="test-vect", 
+    query_vector=test_vect, 
+    field_name="vector",
+)
+pprint.pprint([result["_source"] for result in results], depth=2)

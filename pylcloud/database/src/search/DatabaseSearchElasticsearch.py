@@ -62,8 +62,8 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
 
         # Note:
         # The authentication credentials above are required to connect to Elasticsearch.
-        # When connecting to Kibana server, custom users credentials should be used. They can be created from withing the Kibana server
-        # interface, through the elastic superuser account (which are actually the credentials used above: ELASTIC_USERNAME, ELASTIC_PASSWORD)
+        # When connecting to Kibana server, custom users credentials should be used. They can be created from within the Kibana server
+        # interface, through the elastic superuser account
 
         return None
 
@@ -76,74 +76,71 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
         self.es = Elasticsearch(host, basic_auth=(user, password), verify_certs=False)
         return self.es
 
-    def create_table(self, *args, **kwargs):
-        """See ``create_index()``."""
-        self.logger.warning("Tables do not exist in NoSQL. Create an index instead.")
-        return self.create_index(*args, **kwargs)
-
     def create_index(
         self,
         index_name: str,
-        properties: Optional[dict[str, str]] = None,
-        mapping_file: Optional[str] = None,
+        mappings: Optional[Union[dict, str]] = None,
+        settings: Optional[Union[dict, str]] = None,
         shards: int = 1,
         replicas: int = 1,
     ):
         """
-        Creates an index, with either inline properties or from a JSON mapping file.
+        Creates an Elasticsearch index with flexible mapping and settings inputs.
 
         Parameters
         ----------
         index_name: str
-            The name of the index to create.
-        properties: dict[str], optional
-            The index properties. Format: {'field': {'type': 'dtype'}}.
-        mapping_file: str, optional
-            Path to a JSON file containing the full Elasticsearch mapping.
+            The name of the index.
+        mappings: dict or str, optional
+            Either a dictionary of mappings or a path to a JSON mapping file.
+        settings: dict or str, optional
+            Either a dictionary of settings or a path to a JSON settings file.
         shards: int, default 1
-            Number of shards.
+            Used if 'settings' is not provided.
         replicas: int, default 1
-            Number of replicas.
-
-        Notes
-        -----
-        If both 'properties' and 'mapping_file' are provided, the JSON file will be used.
+            Used if 'settings' is not provided.
         """
 
+        def _load_resource(resource: Any, name: str) -> dict:
+            if isinstance(resource, str):
+                try:
+                    with open(resource, "r") as f:
+                        return json.load(f)
+                except Exception as e:
+                    self.logger.error(f"Failed to load {name} from {resource}: {e}")
+                    return {}
+            return resource or {}
+
+        # Clean index name
         if " " in index_name:
-            self.logger.info(
-                f"Index name can't contain blank spaces. Index name changed to '{index_name.replace(' ', '-')}'."
-            )
             index_name = index_name.replace(" ", "-")
+            self.logger.info(f"Index name adjusted to '{index_name}'.")
 
-        if mapping_file:
-            try:
-                with open(mapping_file, "r") as f:
-                    settings = json.load(f)
-                self.logger.info(f"Mapping loaded from '{mapping_file}'.")
-            except Exception as e:
-                self.logger.error(f"Failed to load mapping file: {e}")
-                return None
-        else:
-            if not properties:
-                self.logger.error(
-                    "You must provide either 'properties' or a valid 'mapping_file'."
-                )
-                return None
+        final_mappings = _load_resource(mappings, "mappings")
+        if final_mappings and "properties" not in final_mappings:
+            final_mappings = {"properties": final_mappings}
 
-            settings = {
-                "settings": {
-                    "number_of_shards": shards,
-                    "number_of_replicas": replicas,
-                },
-                "mappings": {"properties": properties},
+        final_settings = _load_resource(settings, "settings")
+        if not final_settings:
+            final_settings = {
+                "number_of_shards": shards,
+                "number_of_replicas": replicas,
             }
 
-        if not self.es.indices.exists(index=index_name):
-            self.es.indices.create(index=index_name, body=settings)
-            self.logger.info(f"Index '{index_name}' created.")
-        else:
-            self.logger.info(f"Index '{index_name}' already exists.")
+        body = {
+            "settings": final_settings,
+            "mappings": final_mappings
+        }
+
+        try:
+            if not self.es.indices.exists(index=index_name):
+                self.es.indices.create(index=index_name, body=body)
+                self.logger.info(f"Index '{index_name}' created successfully.")
+            else:
+                self.logger.info(f"Index '{index_name}' already exists.")
+        except Exception as e:
+            self.logger.error(f"Could not create index '{index_name}': {e}")
+            
 
     def disconnect_database(self):
         """

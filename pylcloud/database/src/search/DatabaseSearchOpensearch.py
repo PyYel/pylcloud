@@ -1,5 +1,5 @@
 import os, sys
-from typing import Union, Optional, Sequence
+from typing import Union, Optional, Sequence, Any
 from opensearchpy import OpenSearch, helpers, NotFoundError, RequestsHttpConnection
 import json
 import urllib3
@@ -16,6 +16,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 from .DatabaseSearch import DatabaseSearch
 from pylcloud import _config_logger
+
 
 class DatabaseSearchOpensearch(DatabaseSearch):
     """
@@ -126,75 +127,78 @@ class DatabaseSearchOpensearch(DatabaseSearch):
             )
 
         return self.api_os
-
-    def create_table(self, *args, **kwargs):
-        """See ``create_index()``."""
-        self.logger.warning("Tables do not exist in NoSQL. Create an index instead.")
-        return self.create_index(*args, **kwargs)
-
+        
     def create_index(
         self,
         index_name: str,
-        properties: Optional[dict[str, str]] = None,
-        mapping_file: Optional[str] = None,
+        mappings: Optional[Union[dict, str]] = None,
+        settings: Optional[Union[dict, str]] = None,
         shards: int = 1,
         replicas: int = 1,
     ):
         """
-        Creates an index, with either inline properties or from a JSON mapping file.
+        Creates an OpenSearch index with flexible mapping and settings inputs.
 
         Parameters
         ----------
         index_name: str
             The name of the index to create.
-        properties: dict[str], optional
-            The index properties. Format: {'field': {'type': 'dtype'}}.
-        mapping_file: str, optional
-            Path to a JSON file containing the full OpenSearch mapping.
+        mappings: dict or str, optional
+            A dictionary of mappings or a path to a JSON mapping file.
+        settings: dict or str, optional
+            A dictionary of settings or a path to a JSON settings file.
         shards: int, default 1
-            Number of shards.
+            Number of primary shards (used if 'settings' is not provided).
         replicas: int, default 1
-            Number of replicas.
-
-        Notes
-        -----
-        If both 'properties' and 'mapping_file' are provided, the JSON file will be used.
+            Number of replica shards (used if 'settings' is not provided).
         """
 
+        def _load_resource(resource: Any, name: str) -> dict:
+            """Helper to load dictionary directly or from a JSON file path."""
+            if isinstance(resource, str):
+                try:
+                    with open(resource, "r") as f:
+                        return json.load(f)
+                except Exception as e:
+                    self.logger.error(f"Failed to load {name} from '{resource}': {e}")
+                    return {}
+            return resource or {}
+
         if " " in index_name:
-            self.logger.info(
-                f"Index name can't contain blank spaces. Index name changed to '{index_name.replace(' ', '-')}'."
-            )
-            index_name = index_name.replace(" ", "-")
+            index_name = index_name.replace(" ", "-").lower()
+            self.logger.info(f"Index name adjusted to '{index_name}'.")
 
-        if mapping_file:
-            try:
-                with open(mapping_file, "r") as f:
-                    settings = json.load(f)
-                self.logger.info(f"Mapping loaded from '{mapping_file}'.")
-            except Exception as e:
-                self.logger.error(f"Failed to load mapping file: {e}")
-                return None
-        else:
-            if not properties:
-                self.logger.error(
-                    "You must provide either 'properties' or a valid 'mapping_file'."
-                )
-                return None
+        resolved_mappings = _load_resource(mappings, "mappings")
+        if resolved_mappings and "properties" not in resolved_mappings:
+            resolved_mappings = {"properties": resolved_mappings}
 
-            settings = {
-                "settings": {
+        resolved_settings = _load_resource(settings, "settings")
+        if not resolved_settings:
+            resolved_settings = {
+                "index": {
                     "number_of_shards": shards,
                     "number_of_replicas": replicas,
-                },
-                "mappings": {"properties": properties},
+                }
             }
 
-        if not self.api_os.indices.exists(index=index_name):
-            self.api_os.indices.create(index=index_name, body=settings)
-            self.logger.info(f"Index '{index_name}' created.")
-        else:
-            self.logger.info(f"Index '{index_name}' already exists.")
+        # Ensure nested "index" key exists if passed a flat dict for settings
+        elif "index" not in resolved_settings and ("number_of_shards" in resolved_settings or "number_of_replicas" in resolved_settings):
+            resolved_settings = {"index": resolved_settings}
+
+        body = {
+            "settings": resolved_settings,
+            "mappings": resolved_mappings
+        }
+
+        try:
+            if not self.api_os.indices.exists(index=index_name):
+                self.api_os.indices.create(index=index_name, body=body)
+                self.logger.info(f"OpenSearch index '{index_name}' created successfully.")
+            else:
+                self.logger.info(f"OpenSearch index '{index_name}' already exists.")
+        except Exception as e:
+            self.logger.error(f"Error creating OpenSearch index '{index_name}': {e}")
+
 
     def disconnect_database(self):
         """
@@ -202,20 +206,6 @@ class DatabaseSearchOpensearch(DatabaseSearch):
         """
         # OpenSearch client doesn't require explicit disconnection
         pass
-
-    def drop_database(self, database_name: str):
-        """
-        Drops all the indexes from a cluster.
-        """
-        self.logger.warning(
-            "Can't drop an OpenSearch database. Will drop all the indexes from this cluster instead."
-        )
-        raise NotImplementedError
-
-    def drop_table(self, *args, **kwargs):
-        """See ``drop_index()``."""
-        self.logger.warning("Use drop index instead.")
-        return self.drop_index(*args, **kwargs)
 
     def drop_index(self, index_name: str):
         """
@@ -398,8 +388,8 @@ class DatabaseSearchOpensearch(DatabaseSearch):
     def similarity_search(
         self,
         index_name: str,
-        query_vector: list[float],
-        field_name: str = "chunk.vector",
+        vector_query: list[float],
+        vector_field: str = "vector",
         must_pairs: list[dict[str, str]] = [],
         should_pairs: list[dict[str, str]] = [],
         k: int = 5,
@@ -411,10 +401,10 @@ class DatabaseSearchOpensearch(DatabaseSearch):
         ----------
         index_name : str
             The OpenSearch index to search in.
-        query_vector : list
+        vector_query : list
             The vector representation of the input query.
         filed_name: str
-            The name (key) of the field of the vector in the DB. Nested keys should be joined by a dot (.). 
+            The name (key) of the field of the vector in the DB. Nested keys should be joined by a dot (.).
         must_pairs: list[dict[str]]
             A list of ALL the label-value pairs that a record must match to be selected.
         should_pairs: list[dict[str]]
@@ -440,8 +430,8 @@ class DatabaseSearchOpensearch(DatabaseSearch):
         #     "size": k,
         #     "query": {
         #         "knn": {
-        #             field_name: {
-        #                 "vector": query_vector,
+        #             vector_field: {
+        #                 "vector": vector_query,
         #                 "k": k,
         #                 "filter": {
         #                     "bool": {
@@ -457,16 +447,8 @@ class DatabaseSearchOpensearch(DatabaseSearch):
 
         query = {
             "size": k,
-            "query": {
-                "knn": {
-                    field_name: {
-                        "vector": query_vector,
-                        "k": k
-                    }
-                }
-            }
+            "query": {"knn": {vector_field: {"vector": vector_query, "k": k}}},
         }
-
 
         try:
             response = self.api_os.search(index=index_name, body=query)
