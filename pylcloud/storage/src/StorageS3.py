@@ -112,7 +112,9 @@ class StorageS3(Storage):
                     pbar.update(1)
 
         if failures:
-            self.logger.error(f"Failed to verify the existence of {failures}/{len(keys)} keys.")
+            self.logger.error(
+                f"Failed to verify the existence of {failures}/{len(keys)} keys."
+            )
 
         return results
 
@@ -167,8 +169,10 @@ class StorageS3(Storage):
                         failed_files.append(future)
                     pbar.update(1)
         if failed_files:
-            self.logger.error(f"An error was raised (only one is shown if many): \n {str(e)}") # type: ignore
-            self.logger.error(f"Error downloading {len(failed_files)}/{len(keys)} files. See error above.")
+            self.logger.error(f"An error was raised (only one is shown if many): \n {str(e)}")  # type: ignore
+            self.logger.error(
+                f"Error downloading {len(failed_files)}/{len(keys)} files. See error above."
+            )
 
         return failed_files
 
@@ -210,7 +214,9 @@ class StorageS3(Storage):
 
         file_idx = 0
         failed_files = []
-        self.logger.info(f"Downloading batch of content from '{key}'")  #: {page}/{page_total}")
+        self.logger.info(
+            f"Downloading batch of content from '{key}'"
+        )  #: {page}/{page_total}")
         with tqdm(total=page_total) as pbar:
             for result in paginator.paginate(Bucket=self.bucket_name, Prefix=key):
                 if result.get("Contents") is not None:
@@ -314,9 +320,13 @@ class StorageS3(Storage):
                 deleted_counter += len(response.get("Deleted", []))
 
             if deleted_counter == len(keys):
-                self.logger.info(f"All {deleted_counter} keys were successfully deleted.")
+                self.logger.info(
+                    f"All {deleted_counter} keys were successfully deleted."
+                )
             else:
-                self.logger.warning(f"Only {deleted_counter} out of {len(keys)} keys were successfully deleted.")
+                self.logger.warning(
+                    f"Only {deleted_counter} out of {len(keys)} keys were successfully deleted."
+                )
 
             return None
 

@@ -204,8 +204,10 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
                     cur.execute(query, params)
                 self.logger.debug(f"SQL query succeeded.")
             except Exception as e:
-                self.logger.error(f"SQL query failed: {query_str} | Error: {e}", exc_info=True)
-                
+                self.logger.error(
+                    f"SQL query failed: {query_str} | Error: {e}", exc_info=True
+                )
+
         schema = schema.lower().replace("-", "_").replace(" ", "_")
         iam_mode = all(
             [self.aws_access_key_id, self.aws_region_name, self.aws_secret_access_key]
@@ -243,9 +245,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             ).format(user=sql.Identifier(user))
         )
         if iam_mode:
-            _run(
-                sql.SQL("GRANT rds_iam TO {user};").format(user=sql.Identifier(user))
-            )
+            _run(sql.SQL("GRANT rds_iam TO {user};").format(user=sql.Identifier(user)))
 
         # 5. Tighten public schema permissions
         _run(sql.SQL("REVOKE CREATE ON SCHEMA public FROM PUBLIC;"))
@@ -331,7 +331,9 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
 
         try:
             with self.conn.cursor() as cur:
-                cols_sql = sql.SQL(", ").join(sql.SQL(col) for col in column_definitions)
+                cols_sql = sql.SQL(", ").join(
+                    sql.SQL(col) for col in column_definitions
+                )
                 create_sql = sql.SQL(
                     "CREATE TABLE IF NOT EXISTS {schema}.{table} ({cols});"
                 ).format(
@@ -357,7 +359,9 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
                 )
                 self._commit()
             else:
-                self.logger.warning(f"Failed to create table '{self.schema}.{table_name}'.")
+                self.logger.warning(
+                    f"Failed to create table '{self.schema}.{table_name}'."
+                )
                 self._rollback()
                 raise
 
@@ -583,26 +587,38 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
 
                     if VALUES is not None:
                         values = (
-                            [VALUES] if not isinstance(VALUES, (list, tuple)) else list(VALUES)
+                            [VALUES]
+                            if not isinstance(VALUES, (list, tuple))
+                            else list(VALUES)
                         )
                         if len(where_cols) != len(values):
-                            self.logger.warning("WHERE columns and VALUES count mismatch.")
+                            self.logger.warning(
+                                "WHERE columns and VALUES count mismatch."
+                            )
                             return []
                         where_composable = sql.SQL(" AND ").join(
-                            sql.SQL("{col} = %s").format(col=self._col_to_identifier(col))
+                            sql.SQL("{col} = %s").format(
+                                col=self._col_to_identifier(col)
+                            )
                             for col in where_cols
                         )
                         params = values
 
                     elif LIKE is not None:
                         patterns = (
-                            [LIKE] if not isinstance(LIKE, (list, tuple)) else list(LIKE)
+                            [LIKE]
+                            if not isinstance(LIKE, (list, tuple))
+                            else list(LIKE)
                         )
                         if len(where_cols) != len(patterns):
-                            self.logger.warning("WHERE columns and LIKE patterns count mismatch.")
+                            self.logger.warning(
+                                "WHERE columns and LIKE patterns count mismatch."
+                            )
                             return []
                         where_composable = sql.SQL(" AND ").join(
-                            sql.SQL("{col} LIKE %s").format(col=self._col_to_identifier(col))
+                            sql.SQL("{col} LIKE %s").format(
+                                col=self._col_to_identifier(col)
+                            )
                             for col in where_cols
                         )
                         params = patterns
@@ -646,7 +662,9 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             self.connect_database(self.database, self.user, self.password)
 
         if not kwargs:
-            self.logger.warning("send_data called with no column values — nothing to insert.")
+            self.logger.warning(
+                "send_data called with no column values — nothing to insert."
+            )
             return
 
         try:
@@ -662,9 +680,9 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
                 else:
                     table_ident = sql.Identifier(table_name)
 
-                insert_sql = sql.SQL("INSERT INTO {table} ({cols}) VALUES ({vals});").format(
-                    table=table_ident, cols=columns, vals=placeholders
-                )
+                insert_sql = sql.SQL(
+                    "INSERT INTO {table} ({cols}) VALUES ({vals});"
+                ).format(table=table_ident, cols=columns, vals=placeholders)
                 cur.execute(insert_sql, list(kwargs.values()))
 
             self._commit()
@@ -703,7 +721,9 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             self.connect_database(self.database, self.user, self.password)
 
         if not kwargs:
-            self.logger.warning("update_data called with no SET values — nothing to update.")
+            self.logger.warning(
+                "update_data called with no SET values — nothing to update."
+            )
             return
 
         try:
@@ -723,26 +743,38 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
 
                     if VALUES is not None:
                         values = (
-                            [VALUES] if not isinstance(VALUES, (list, tuple)) else list(VALUES)
+                            [VALUES]
+                            if not isinstance(VALUES, (list, tuple))
+                            else list(VALUES)
                         )
                         if len(where_cols) != len(values):
-                            self.logger.warning("WHERE columns and VALUES count mismatch.")
+                            self.logger.warning(
+                                "WHERE columns and VALUES count mismatch."
+                            )
                             return
                         where_composable = sql.SQL(" AND ").join(
-                            sql.SQL("{col} = %s").format(col=self._col_to_identifier(col))
+                            sql.SQL("{col} = %s").format(
+                                col=self._col_to_identifier(col)
+                            )
                             for col in where_cols
                         )
                         where_values = values
 
                     elif LIKE is not None:
                         patterns = (
-                            [LIKE] if not isinstance(LIKE, (list, tuple)) else list(LIKE)
+                            [LIKE]
+                            if not isinstance(LIKE, (list, tuple))
+                            else list(LIKE)
                         )
                         if len(where_cols) != len(patterns):
-                            self.logger.warning("WHERE columns and LIKE patterns count mismatch.")
+                            self.logger.warning(
+                                "WHERE columns and LIKE patterns count mismatch."
+                            )
                             return
                         where_composable = sql.SQL(" AND ").join(
-                            sql.SQL("{col} LIKE %s").format(col=self._col_to_identifier(col))
+                            sql.SQL("{col} LIKE %s").format(
+                                col=self._col_to_identifier(col)
+                            )
                             for col in where_cols
                         )
                         where_values = patterns
@@ -818,7 +850,9 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             params: list = []
 
             if VALUES is not None:
-                values = [VALUES] if not isinstance(VALUES, (list, tuple)) else list(VALUES)
+                values = (
+                    [VALUES] if not isinstance(VALUES, (list, tuple)) else list(VALUES)
+                )
                 if len(where_cols) != len(values):
                     self.logger.warning("WHERE columns and VALUES count mismatch.")
                     return
@@ -831,7 +865,9 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             elif LIKE is not None:
                 patterns = [LIKE] if not isinstance(LIKE, (list, tuple)) else list(LIKE)
                 if len(where_cols) != len(patterns):
-                    self.logger.warning("WHERE columns and LIKE patterns count mismatch.")
+                    self.logger.warning(
+                        "WHERE columns and LIKE patterns count mismatch."
+                    )
                     raise
                 where_composable = sql.SQL(" AND ").join(
                     sql.SQL("{col} LIKE %s").format(col=self._col_to_identifier(col))
@@ -840,7 +876,9 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
                 params = patterns
 
             else:
-                self.logger.warning("Either VALUES or LIKE must be provided for DELETE.")
+                self.logger.warning(
+                    "Either VALUES or LIKE must be provided for DELETE."
+                )
                 raise
 
             # Resolve table identifier
@@ -869,9 +907,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
             self.logger.error(f"Error deleting data from '{FROM}': {e}")
             raise
 
-    def raw_sql(
-        self, SQL: str, VALUES: Optional[tuple] = None
-    ) -> list[dict]:
+    def raw_sql(self, SQL: str, VALUES: Optional[tuple] = None) -> list[dict]:
         """
         Execute an arbitrary SQL statement and return all rows as dicts.
 
@@ -907,7 +943,7 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         except Exception as e:
             self.logger.critical(f"Raw SQL failed: {e}")
             raise
-    
+
     def execute_file(self, file_path: str) -> None:
         """
         Execute SQL from a ``.sql`` file or insert records from a ``.json`` file.
@@ -949,7 +985,11 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
                         return
 
                     for record in data:
-                        if not isinstance(record, dict) or "table" not in record or "data" not in record:
+                        if (
+                            not isinstance(record, dict)
+                            or "table" not in record
+                            or "data" not in record
+                        ):
                             self.logger.warning(
                                 "Invalid JSON record — each item must have 'table' and 'data' keys."
                             )
@@ -966,8 +1006,12 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
                         else:
                             table_ident = sql.Identifier(tbl)
 
-                        columns = sql.SQL(", ").join(sql.Identifier(k) for k in row_data)
-                        placeholders = sql.SQL(", ").join(sql.Placeholder() for _ in row_data)
+                        columns = sql.SQL(", ").join(
+                            sql.Identifier(k) for k in row_data
+                        )
+                        placeholders = sql.SQL(", ").join(
+                            sql.Placeholder() for _ in row_data
+                        )
                         insert_sql = sql.SQL(
                             "INSERT INTO {table} ({cols}) VALUES ({vals});"
                         ).format(table=table_ident, cols=columns, vals=placeholders)
@@ -1014,7 +1058,6 @@ class DatabaseRelationalPostgreSQL(DatabaseRelational):
         parts = col.split(".", 1)
         if len(parts) == 2:
             return sql.SQL("{t}.{c}").format(
-                t=sql.Identifier(parts[0]),
-                c=sql.Identifier(parts[1])
+                t=sql.Identifier(parts[0]), c=sql.Identifier(parts[1])
             )
         return sql.Identifier(col)

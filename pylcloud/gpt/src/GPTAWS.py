@@ -176,7 +176,6 @@ class GPTAWS(GPT):
 
         return None
 
-
     def return_embedding(
         self,
         model_name: str,
@@ -258,7 +257,6 @@ class GPTAWS(GPT):
         except Exception as e:
             self.logger.error(e)
             return None
-
 
     def return_generation(
         self,
@@ -360,14 +358,18 @@ class GPTAWS(GPT):
                 "output_tokens": response["usage"]["outputTokens"],
             }
 
-            gpt_message: GPTMessage = {"model_name": model_name, "thinking": thinking, "text": text, "usage": usage}
+            gpt_message: GPTMessage = {
+                "model_name": model_name,
+                "thinking": thinking,
+                "text": text,
+                "usage": usage,
+            }
 
             return gpt_message
 
         except Exception as e:
             self.logger.error(e)
             return None
-
 
     def yield_generation(
         self,
@@ -494,14 +496,18 @@ class GPTAWS(GPT):
             # Parse thinking from the fully accumulated text at the end
             thinking, text = self.parse_model_output(text)
 
-            gpt_message: GPTMessage = {"model_name": model_name, "thinking": thinking, "text": text, "usage": usage}
+            gpt_message: GPTMessage = {
+                "model_name": model_name,
+                "thinking": thinking,
+                "text": text,
+                "usage": usage,
+            }
 
             yield gpt_message
 
         except Exception as e:
             self.logger.error(e)
             yield None
-
 
     def return_agent(
         self,
@@ -589,7 +595,7 @@ class GPTAWS(GPT):
             - "usage": {"input_tokens": int, "output_tokens": int}, cumulative across all inference calls in the loop
         - GPTAgentDetails:
             - "iterations": int, number of tool-call rounds executed
-            - "stop_reason": Literal['done', 'max_tokens', 'unexpected'], why did the agent stopped 
+            - "stop_reason": Literal['done', 'max_tokens', 'unexpected'], why did the agent stopped
             - "history": list[dict[str, str]], unfiltered tool-llm conversation history (with thinking beacons, inner dialog...)
 
         Examples
@@ -614,7 +620,7 @@ class GPTAWS(GPT):
         >>> print(agent_exec_details["iterations"])  # how many tool calls were made
         ... 5
         >>> print(agent_exec_details["iterations"])  # how many tool calls were made
-        ... 
+        ...
         >>> print(agent_exec_details["history"])        # Inner dialog
         """
         try:
@@ -657,8 +663,17 @@ class GPTAWS(GPT):
                     raw_text = next((b["text"] for b in raw_content if "text" in b), "")
                     thinking, text = self.parse_model_output(raw_text, raw_content)
 
-                    gpt_message: GPTMessage = {"model_name": model_name, "thinking": thinking, "text": text, "usage": total_usage}
-                    gpt_agent_details: GPTAgentDetails = {"iterations": iterations, "history": history, "stop_reason": "done"}
+                    gpt_message: GPTMessage = {
+                        "model_name": model_name,
+                        "thinking": thinking,
+                        "text": text,
+                        "usage": total_usage,
+                    }
+                    gpt_agent_details: GPTAgentDetails = {
+                        "iterations": iterations,
+                        "history": history,
+                        "stop_reason": "done",
+                    }
 
                     return gpt_message, gpt_agent_details
 
@@ -714,8 +729,17 @@ class GPTAWS(GPT):
                     raw_text = next((b["text"] for b in raw_content if "text" in b), "")
                     thinking, text = self.parse_model_output(raw_text, raw_content)
 
-                    gpt_message: GPTMessage = {"model_name": model_name, "thinking": thinking, "text": text, "usage": total_usage}
-                    gpt_agent_details: GPTAgentDetails = {"iterations": iterations, "history": history, "stop_reason": "max_tokens"}
+                    gpt_message: GPTMessage = {
+                        "model_name": model_name,
+                        "thinking": thinking,
+                        "text": text,
+                        "usage": total_usage,
+                    }
+                    gpt_agent_details: GPTAgentDetails = {
+                        "iterations": iterations,
+                        "history": history,
+                        "stop_reason": "max_tokens",
+                    }
 
                     return gpt_message, gpt_agent_details
 
@@ -728,16 +752,23 @@ class GPTAWS(GPT):
                 f"Agent reached max_iterations ({max_iterations}) without finishing."
             )
 
-
-            gpt_message: GPTMessage = {"model_name": model_name, "thinking": None, "text": "", "usage": total_usage}
-            gpt_agent_details: GPTAgentDetails = {"iterations": iterations, "history": history, "stop_reason": "unexpected"}
+            gpt_message: GPTMessage = {
+                "model_name": model_name,
+                "thinking": None,
+                "text": "",
+                "usage": total_usage,
+            }
+            gpt_agent_details: GPTAgentDetails = {
+                "iterations": iterations,
+                "history": history,
+                "stop_reason": "unexpected",
+            }
 
             return gpt_message, gpt_agent_details
 
         except Exception as e:
             self.logger.error(e)
             return None, None
-
 
     def _build_converse_request(
         self,
@@ -783,7 +814,9 @@ class GPTAWS(GPT):
             request["toolConfig"] = {"tools": tools}
 
         # Thinking config: only applied when explicitly requested and supported
-        model_supports_thinking = self.generative_models[model_name].get("thinking", False)
+        model_supports_thinking = self.generative_models[model_name].get(
+            "thinking", False
+        )
 
         if thinking_allowed is not None and not model_supports_thinking:
             self.logger.warning(
@@ -791,14 +824,14 @@ class GPTAWS(GPT):
             )
 
         elif thinking_allowed is not None and model_supports_thinking:
-            request["inferenceConfig"] = {} # Enforce default API settings
+            request["inferenceConfig"] = {}  # Enforce default API settings
             if "nova-2" in model_name:
                 request["additionalModelRequestFields"] = {
-                        "reasoningConfig": {
-                            "type": "enabled" if thinking_allowed else "disabled",
-                            "maxReasoningEffort": thinking_effort 
-                        }
+                    "reasoningConfig": {
+                        "type": "enabled" if thinking_allowed else "disabled",
+                        "maxReasoningEffort": thinking_effort,
                     }
+                }
             elif "claude" in model_name and thinking_allowed:
                 request["additionalModelRequestFields"] = {
                     "reasoningConfig": {

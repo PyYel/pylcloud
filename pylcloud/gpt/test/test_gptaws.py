@@ -20,19 +20,28 @@ api = GPTAWS(
 
 # EMBEDDING
 print("\n==================================\nEMBEDDING")
-response = api.return_embedding(model_name="titan-text-embeddings", prompt="test", dimensions=256)
+response = api.return_embedding(
+    model_name="titan-text-embeddings", prompt="test", dimensions=256
+)
 pprint.pprint(response, depth=1)
 
 
 # SIMPLE GENERATION CALL
 print("\n==================================\nRETURN")
-response = api.return_generation(model_name="nova-2-lite", user_prompt="test", thinking_allowed=True, thinking_effort="medium")
+response = api.return_generation(
+    model_name="nova-2-lite",
+    user_prompt="test",
+    thinking_allowed=True,
+    thinking_effort="medium",
+)
 pprint.pprint(response)
 
 
 # STREAMING GENERATION CALL
 print("\n==================================\nSTREAMING")
-for chunk in api.yield_generation(model_name="nova-pro", user_prompt="test", thinking_allowed=True):
+for chunk in api.yield_generation(
+    model_name="nova-pro", user_prompt="test", thinking_allowed=True
+):
     print(chunk)
     response = chunk
 pprint.pprint(response)
@@ -53,7 +62,11 @@ TOOLS_SPEC = [
                     "type": "object",
                     "properties": {
                         "query": {"type": "string", "description": "The search query."},
-                        "top_k": {"type": "integer", "description": "Number of results to return.", "default": 3},
+                        "top_k": {
+                            "type": "integer",
+                            "description": "Number of results to return.",
+                            "default": 3,
+                        },
                     },
                     "required": ["query"],
                 }
@@ -68,7 +81,10 @@ TOOLS_SPEC = [
                 "json": {
                     "type": "object",
                     "properties": {
-                        "document_id": {"type": "string", "description": "The document ID."},
+                        "document_id": {
+                            "type": "string",
+                            "description": "The document ID.",
+                        },
                     },
                     "required": ["document_id"],
                 }
@@ -80,18 +96,36 @@ TOOLS_SPEC = [
 # Dummy data simulating a vector store + metadata DB
 FAKE_CHUNKS = {
     "solar panels": [
-        {"doc_id": "doc_001", "text": "Monocrystalline solar panels offer efficiency rates of 20-23%."},
-        {"doc_id": "doc_002", "text": "Polycrystalline panels are cheaper but average 15-17% efficiency."},
+        {
+            "doc_id": "doc_001",
+            "text": "Monocrystalline solar panels offer efficiency rates of 20-23%.",
+        },
+        {
+            "doc_id": "doc_002",
+            "text": "Polycrystalline panels are cheaper but average 15-17% efficiency.",
+        },
     ],
     "installation": [
-        {"doc_id": "doc_001", "text": "South-facing roofs with 30° tilt maximize annual yield."},
+        {
+            "doc_id": "doc_001",
+            "text": "South-facing roofs with 30° tilt maximize annual yield.",
+        },
     ],
 }
 
 FAKE_METADATA = {
-    "doc_001": {"title": "Solar Panel Guide 2024", "author": "John Doe", "date": "2024-03-01"},
-    "doc_002": {"title": "Budget Solar Options", "author": "Jane Smith", "date": "2024-01-15"},
+    "doc_001": {
+        "title": "Solar Panel Guide 2024",
+        "author": "John Doe",
+        "date": "2024-03-01",
+    },
+    "doc_002": {
+        "title": "Budget Solar Options",
+        "author": "Jane Smith",
+        "date": "2024-01-15",
+    },
 }
+
 
 def dummy_tool_handler(name: str, inputs: dict) -> str:
     """
@@ -114,6 +148,7 @@ def dummy_tool_handler(name: str, inputs: dict) -> str:
 
     return f"Unknown tool: {name}"
 
+
 model_name = "nova-micro"
 result, details = api.return_agent(
     model_name=model_name,
@@ -128,8 +163,9 @@ pprint.pprint(result)
 if result and details:
 
     import json
+
     with open(os.path.join(os.path.dirname(__file__), "agent.json"), "w") as f:
-        json.dump(details['history'], f, indent=4)
+        json.dump(details["history"], f, indent=4)
 
     print(f"Iterations: {details['iterations']}")
     print(f"Usage: {result['usage']}")

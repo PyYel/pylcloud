@@ -2,7 +2,17 @@ import os, sys
 from abc import ABC, abstractmethod
 from uuid import uuid4
 from collections import Counter
-from typing import Optional, Union, List, Dict, Any, TypedDict, Callable, Generator, Literal
+from typing import (
+    Optional,
+    Union,
+    List,
+    Dict,
+    Any,
+    TypedDict,
+    Callable,
+    Generator,
+    Literal,
+)
 from io import BytesIO
 import nltk
 from nltk.data import find
@@ -11,6 +21,7 @@ from nltk.tokenize import word_tokenize, sent_tokenize
 import re
 
 from pylcloud import _config_logger
+
 
 class GPTMessage(TypedDict):
     """
@@ -27,8 +38,9 @@ class GPTMessage(TypedDict):
     - usage: dict[str, int]
         The input and output tokens count
     """
+
     model_name: str
-    thinking: Optional[str] 
+    thinking: Optional[str]
     text: str
     usage: dict[str, int]
 
@@ -46,6 +58,7 @@ class GPTEmbedding(TypedDict):
     - usage: dict[str, int]
         The input and output tokens count (output is a fixed value equal to 0)
     """
+
     model_name: str
     embedding: List[float]
     usage: dict[str, int]
@@ -63,6 +76,7 @@ class GPTAgentDetails(TypedDict):
         The messages exchanged between the tools suite and the LLM.
         {'role': Literal['user', 'assistant'], 'content': str}
     """
+
     iterations: int
     history: List[dict[str, str]]
     stop_reason: Literal["done", "max_tokens", "unexpected"]
@@ -250,7 +264,10 @@ class GPT(ABC):
         # Nova — inline <thinking> tags in the text block
         match = re.search(r"<thinking>(.*?)</thinking>\s*", raw_text, flags=re.DOTALL)
         if match:
-            return match.group(1).strip(), raw_text[match.end():].strip(),
+            return (
+                match.group(1).strip(),
+                raw_text[match.end() :].strip(),
+            )
 
         # No thinking detected
         return None, raw_text.strip()
