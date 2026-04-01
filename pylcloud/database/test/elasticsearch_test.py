@@ -17,34 +17,34 @@ load_dotenv(os.path.join(DATABASE_DIR_PATH, "src", "search", ".env"))
 
 
 # Read write prod user
-api_os = DatabaseSearchElasticsearch(
+api_es = DatabaseSearchElasticsearch(
     host="http://localhost:9200",
     user=os.getenv("ELASTICSEARCH_USER", ""),
     password=os.getenv("ELASTICSEARCH_PASSWORD", ""),
 )
 
-api_os.drop_index(index_name="test")
-api_os.drop_index(index_name="test")
-api_os.drop_index(index_name="test-vect")
+api_es.drop_index(index_name="test")
+api_es.drop_index(index_name="test")
+api_es.drop_index(index_name="test-vect")
 
 
-api_os.create_index(
+api_es.create_index(
     index_name="test",
     mappings={"name": {"type": "keyword"}, "age": {"type": "float"}},
 )
 
-indexes = api_os.list_indexes()
+indexes = api_es.describe_database()
 
 
-api_os.send_data(index_name="test", documents=[{"name": "john1", "age": 10}, {"name": "john2", "age": 20}])
+api_es.send_data(index_name="test", documents=[{"name": "john1", "age": 10}, {"name": "john2", "age": 20}])
 
-api_os.delete_data(index_name="test", pairs={"name": "john1"})
+api_es.delete_data(index_name="test", pairs={"name": "john1"})
 
 time.sleep(1) # time for os indexing
-print([response["_source"] for response in api_os.query_data(index_name="test")])
+print([response["_source"] for response in api_es.query_data(index_name="test")])
 
 
-api_os.create_index(
+api_es.create_index(
     index_name="test-vect",
     mappings={
         "name": {"type": "keyword"}, 
@@ -58,10 +58,10 @@ api_os.create_index(
 
 test_vect = [random.random() for k in range(256)]
 
-api_os.send_data(index_name="test-vect", documents=[{"name": "john1", "vector": test_vect}])
+api_es.send_data(index_name="test-vect", documents=[{"name": "john1", "vector": test_vect}])
 
 time.sleep(1)
-results = api_os.similarity_search(
+results = api_es.similarity_search(
     index_name="test-vect", 
     vector_query=test_vect, 
     vector_field="vector",

@@ -201,15 +201,7 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
 
         return None
 
-    def describe_database(self):
-        """
-        List the databases (clusters) present on an Elasticsearch DB server.
-        """
-        info = self.es.info()
-        self.logger.info(f"Cluster info: {info}")
-        return info
-
-    def list_indexes(self, system_db: bool = False):
+    def describe_database(self, system_db: bool = False):
         """
         Returns a list of the names of the indexes on the connected cluster.
 
@@ -220,8 +212,11 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
 
         Notes
         -----
-        - To list the existing databases, see ``list_databases()``.
+        - Logs cluster info if supported.
         """
+        info = self.es.info()
+        self.logger.info(f"Cluster info: {info}")
+
         if system_db:
             # built-in system indexes start with a dot
             indexes = [index["index"] for index in self.es.cat.indices(format="json")]  # type: ignore

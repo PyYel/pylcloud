@@ -244,27 +244,22 @@ class DatabaseSearchOpensearch(DatabaseSearch):
 
         return None
 
-    def describe_database(self):
-        """
-        List the databases (clusters) present on an Elasticsearch DB server.
-        """
-        info = self.api_os.info()
-        self.logger.info(f"Cluster info: {info}")
-        return info
-
-    def list_indexes(self, system_db: bool = False):
+    def describe_database(self, system_db: bool = False):
         """
         Returns a list of the names of the indexes on the connected cluster.
 
         Parameters
         ----------
         system_db: bool
-            Whether to return the built-in system indexes or not.
+            Whereas returning the builtin databases if any, or not.
 
         Notes
         -----
-        - To list the existing databases, see ``list_databases()``.
+        - Logs cluster info if supported.
         """
+        info = self.api_os.info()
+        self.logger.info(f"Cluster info: {info}")
+
         try:
             if system_db:
                 # built-in system indexes start with a dot

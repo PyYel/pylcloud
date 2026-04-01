@@ -33,7 +33,7 @@ api_os.create_index(
     mappings={"name": {"type": "keyword"}, "age": {"type": "float"}},
 )
 
-indexes = api_os.list_indexes()
+indexes = api_os.describe_database()
 
 
 api_os.send_data(index_name="test", documents=[{"name": "john1", "age": 10}, {"name": "john2", "age": 20}])

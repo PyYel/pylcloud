@@ -1,8 +1,7 @@
 import os, sys
 import hashlib
 import logging
-from typing import Optional
-from datetime import datetime
+from typing import Optional, Union
 from abc import ABC, abstractmethod
 
 from ..Database import Database
@@ -13,7 +12,7 @@ class DatabaseSearch(Database):
     Databases API helper.
     """
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         """
         Initializes the helper and its logging.
         """
@@ -22,22 +21,46 @@ class DatabaseSearch(Database):
         return None
 
     @abstractmethod
-    def create_index(self, *args, **kwargs):
-        """
-        Creates a new index/collection.
-        """
+    def connect_database(
+        self, 
+        host: str = "127.0.0.1", 
+        user: str = "user", 
+        password: str = "password"
+    ):
         raise NotImplementedError
 
     @abstractmethod
-    def drop_index(self, *args, **kwargs):
+    def disconnect_database(self):
         """
-        Drops the matching indexes/collections on this cluster (database).
+        Closes the database linked to the connector ``conn``.
         """
+        pass
+
+    @abstractmethod
+    def create_index(
+        self,
+        index_name: str,
+        mappings: Optional[Union[dict, str]] = None,
+        settings: Optional[Union[dict, str]] = None,
+        shards: int = 1,
+        replicas: int = 1,
+    ):
+        raise NotImplementedError
+    
+    @abstractmethod
+    def drop_index(self, index_name: str):
         raise NotImplementedError
 
     @abstractmethod
-    def list_indexes(self, *args, **kwargs):
-        """
-        Lists all the indexes/collections on this cluster (database).
-        """
+    def similarity_search(
+        self,
+        index_name: str,
+        vector_query: list[float],
+        vector_field: str = "vector",
+        must_pairs: list[dict[str, str]] = [],
+        should_pairs: list[dict[str, str]] = [],
+        k: int = 5,
+    ):
         raise NotImplementedError
+
+
