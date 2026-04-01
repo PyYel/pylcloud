@@ -68,7 +68,7 @@ api_os.send_data(index_name="test-vect", documents=[{"name": "john1", "vector": 
 time.sleep(1)
 results = api_os.similarity_search(
     index_name="test-vect", 
-    query_vector=test_vect, 
-    field_name="vector",
+    vector_query=test_vect, 
+    vector_field="vector",
 )
 pprint.pprint([result["_source"] for result in results], depth=2)

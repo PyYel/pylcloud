@@ -461,26 +461,3 @@ class DatabaseSearchOpensearch(DatabaseSearch):
             self.logger.error(f"Error: An error occurred: {e}")
             return []
 
-    def _commit(self):
-        """
-        Commits the transactions operated since the last commit.
-
-        Note: OpenSearch, like Elasticsearch, doesn't have explicit transaction commits.
-        Operations are automatically committed when performed.
-        """
-        self.logger.warning(
-            "OpenSearch doesn't support explicit transactions. Operations are committed automatically."
-        )
-        raise NotImplementedError
-
-    def _rollback(self):
-        """
-        Rollbacks the transactions operated since the last commit.
-
-        Note: OpenSearch, like Elasticsearch, doesn't have explicit transaction rollbacks.
-        For data consistency, consider using snapshot/restore features instead.
-        """
-        self.logger.warning(
-            "OpenSearch doesn't support explicit transaction rollbacks. Consider using snapshot/restore for data recovery."
-        )
-        raise NotImplementedError

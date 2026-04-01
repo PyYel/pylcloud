@@ -12,7 +12,7 @@ warnings.filterwarnings(
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 from .DatabaseSearch import DatabaseSearch
-
+from pylcloud import _config_logger
 
 class DatabaseSearchElasticsearch(DatabaseSearch):
     """
@@ -53,6 +53,8 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
         self.host = host
         self.user = user
         self.password = password
+
+        self.logger = _config_logger(logs_name="DatabaseSearchElasticsearch")
 
         # TODO: Add connection certificate
         try:
@@ -361,14 +363,14 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
     def similarity_search(
         self,
         index_name: str,
-        query_vector: Optional[list[float]] = None,
-        query_text: Optional[str] = None,
+        vector_query: Optional[list[float]] = None,
+        vector_field: str = "vector",
+        vector_weight: float = 0.7,
+        text_query: Optional[str] = None,
+        text_field: str = "content",
+        text_weight: float = 0.3,
         must_pairs: list[dict[str, str]] = [],
         should_pairs: list[dict[str, str]] = [],
-        vector_field: str = "chunk_vector",
-        text_field: str = "chunk_content",
-        vector_weight: float = 0.7,
-        text_weight: float = 0.3,
         initial_k: int = 20,
         final_k: int = 5,
     ) -> list[dict[str, Any]]:
@@ -379,9 +381,9 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
         ----------
         index_name : str
             The Elasticsearch index to search in.
-        query_vector : list[float], optional
+        vector_query : list[float], optional
             The vector representation of the input query.
-        query_text : str, optional
+        text_query : str, optional
             The text query for keyword matching.
         must_pairs : list[dict[str, str]], optional
             List of field-value pairs that must match in the query.
@@ -406,141 +408,52 @@ class DatabaseSearchElasticsearch(DatabaseSearch):
             A list of retrieved documents sorted by combined similarity.
         """
 
-        if query_vector is None and query_text is None:
-            error_msg = "Either query_vector or query_text must be provided"
-            self.logger.error(error_msg)
-            raise ValueError(error_msg)
+        if vector_query is None and text_query is None:
+            raise ValueError("Either vector_query or text_query must be provided")
 
-        if final_k > initial_k:
-            final_k = initial_k
-            self.logger.warning(
-                "Hybrid search 'final_k' should be smaller than 'initial_k'."
-            )
+        must_conditions = [{"term": pair} for pair in must_pairs]
+        should_conditions = [{"term": pair} for pair in should_pairs]
 
-        self.logger.debug(
-            f"Starting hybrid search on index '{index_name}' with k={initial_k}"
-        )
-
-        # Build must conditions
-        must_conditions = []
-        for must_pair in must_pairs:
-            must_conditions.append({"term": must_pair})
-
-        # Build should conditions
-        should_conditions = []
-        for should_pair in should_pairs:
-            should_conditions.append({"term": should_pair})
-
-        # Create the query structure
-        query = {
+        search_body = {
             "size": initial_k,
             "query": {
                 "bool": {
                     "must": must_conditions,
                     "should": should_conditions,
-                    "minimum_should_match": 1 if should_conditions else 0,
+                    "filter": []
                 }
-            },
+            }
         }
 
-        # Add vector search if query_vector is provided
-        if query_vector is not None:
-            if not isinstance(query_vector, list) or not all(
-                isinstance(x, (int, float)) for x in query_vector
-            ):
-                self.logger.error(
-                    "Similarity search 'query_vector' must be a list of numbers."
-                )
-                return []
+        if vector_query is not None:
+            # Native 'knn' top-level parameter for speed (ANN)
+            search_body["knn"] = {
+                "field": vector_field,
+                "query_vector": vector_query,
+                "k": initial_k,
+                "num_candidates": initial_k * 5,
+                "boost": vector_weight
+            }
 
-            self.logger.debug(
-                f"Adding vector search component with weight {vector_weight}"
-            )
-
-            # Add kNN query with weight
-            if "should" not in query["query"]["bool"]:
-                query["query"]["bool"]["should"] = []
-
-            query["query"]["bool"]["should"].append(
-                {
-                    "script_score": {
-                        "query": {"match_all": {}},
-                        "script": {
-                            "source": f"knn_score({vector_field}, params.query_vector) * params.weight",
-                            "params": {
-                                "query_vector": query_vector,
-                                "weight": vector_weight,
-                            },
-                        },
+        # Hybrid text search
+        if text_query is not None:
+            text_match = {
+                "match": {
+                    text_field: {
+                        "query": text_query,
+                        "fuzziness": "AUTO",
+                        "boost": text_weight
                     }
                 }
-            )
-
-        # Add text search if query_text is provided
-        if query_text is not None:
-            if not isinstance(query_text, str):
-                error_msg = "query_text must be a string"
-                self.logger.error(error_msg)
-                raise TypeError(error_msg)
-
-            self.logger.debug(f"Adding text search component with weight {text_weight}")
-
-            # Add text query with weight
-            if "should" not in query["query"]["bool"]:
-                query["query"]["bool"]["should"] = []
-
-            query["query"]["bool"]["should"].append(
-                {
-                    "script_score": {
-                        "query": {
-                            "match": {
-                                text_field: {"query": query_text, "fuzziness": "AUTO"}
-                            }
-                        },
-                        "script": {
-                            "source": f"_score * params.weight",
-                            "params": {"weight": text_weight},
-                        },
-                    }
-                }
-            )
-
-        # Ensure we match something if both vector and text components are used
-        if query_vector is not None and query_text is not None:
-            query["query"]["bool"]["minimum_should_match"] = 1
+            }
+            search_body["query"]["bool"]["should"].append(text_match)
 
         try:
-            self.logger.debug(f"Executing hybrid search query: {query}")
-            response = self.es.search(index=index_name, body=query)
-            documents = [hit for hit in response["hits"]["hits"]]
-            self.logger.info(
-                f"Hybrid similarity search found {len(documents)} matching documents, returning top {final_k} scorers."
-            )
-            return documents[:final_k]
+            response = self.es.search(index=index_name, body=search_body)
+            hits = response["hits"]["hits"]
+            return hits[:final_k]
 
-        except ConnectionError as e:
-            self.logger.error(f"Connection error during search: {str(e)}")
-            return []
-        except RequestError as e:
-            self.logger.error(f"Invalid query error: {str(e)}")
-            return []
-        except NotFoundError as e:
-            self.logger.error(f"Index '{index_name}' not found: {str(e)}")
-            return []
         except Exception as e:
-            self.logger.error(
-                f"Unexpected error during hybrid similarity search: {str(e)}"
-            )
+            self.logger.error(f"Hybrid search failed: {str(e)}")
             return []
 
-    def _commit(self):
-        """
-        Commits the transactions operated since the last commit.
-        """
-        raise NotImplementedError
-
-    def _rollback(self):
-        """
-        roolbacks the transactions operated since the last commit.
-        """
-        raise NotImplementedError
