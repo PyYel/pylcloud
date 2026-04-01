@@ -91,10 +91,10 @@ services:
           echo ""
           echo "============================================================"
           echo "Creating custom production role for user OPENSEARCH_USER=${OPENSEARCH_USER} ..."
-          curl -ks -X PUT -u ${OPENSEARCH_ROOTUSER}:${OPENSEARCH_ROOTPASSWORD} \
+          curl -ks -X PUT -u "${OPENSEARCH_ROOTUSER}:${OPENSEARCH_ROOTPASSWORD}" \
             -H "Content-Type: application/json" \
             "${OPENSEARCH_HOST}/_plugins/_security/api/roles/prod_role" \
-            -d "{\"cluster_permissions\": [\"cluster_monitor\"], \"index_permissions\": [{\"index_patterns\": [\"*\"], \"allowed_actions\": [\"*\"]}]}"
+            -d "{\"cluster_permissions\":[\"cluster_monitor\",\"cluster:admin/repository/*\",\"indices:data/read/scroll/clear\"],\"index_permissions\":[{\"index_patterns\":[\"*\"],\"allowed_actions\":[\"crud\",\"manage\",\"index\"]}]}"
 
           echo ""
           echo "============================================================"
