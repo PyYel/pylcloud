@@ -15,7 +15,11 @@ class Database(ABC):
     """
 
     def __init__(self, *args, **kwargs):
-        """ """
+        """ 
+        Defines common methods for all Database modules.
+
+
+        """
         super().__init__()
 
         # Default logger fallback
@@ -28,7 +32,9 @@ class Database(ABC):
 
     @abstractmethod
     def connect_database(self, *args, **kwargs):
-        """ """
+        """ 
+        Creates a connector object. Should be a pool for better scalability.
+        """
         raise NotImplementedError
 
     @abstractmethod
@@ -47,7 +53,9 @@ class Database(ABC):
 
     @abstractmethod
     def disconnect_database(self, *args, **kwargs):
-        """ """
+        """ 
+        Should close all opened connection to the DB.
+        """
         raise NotImplementedError
 
     @abstractmethod

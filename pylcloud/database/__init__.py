@@ -1,5 +1,6 @@
 from .src.search.DatabaseSearchElasticsearch import DatabaseSearchElasticsearch
 from .src.search.DatabaseSearchOpensearch import DatabaseSearchOpensearch
+from .src.search.DatabaseSearchS3Vector import DatabaseSearchS3Vector
 
 from .src.document.DatabaseDocumentMongoDB import DatabaseDocumentMongoDB
 
