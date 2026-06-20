@@ -16,10 +16,6 @@ from typing import (
     Literal,
 )
 from io import BytesIO
-import nltk
-from nltk.data import find
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize, sent_tokenize
 import re
 
 from pylcloud import _config_logger
@@ -94,8 +90,6 @@ class GPT(ABC):
 
         # Default logger fallback
         self.logger = _config_logger(logs_name="GPT")
-
-        self._download_nltk_data()
 
         self.available_models = {}
         self.costs: dict[str, dict[str, float]] = {}
@@ -203,26 +197,7 @@ class GPT(ABC):
         max_iterations: int = 10,
     ) -> tuple[Optional[GPTMessage], Optional[GPTAgentDetails]]:
         raise NotImplementedError
-
-    def generate_title(self, conversation: str):
-        """
-        Generates a title for a conversation.
-        """
-
-        words = word_tokenize(conversation.lower())
-
-        # Remove stopwords and punctuation
-        stop_words = set(stopwords.words("english"))
-        filtered_words = [
-            word for word in words if word.isalnum() and word not in stop_words
-        ]
-
-        # Get the most common words
-        word_counts = Counter(filtered_words)
-        common_words = [word for word, count in word_counts.most_common(4)]
-        title = " ".join(common_words)
-
-        return title.title()
+    
 
     def parse_model_output(
         self,
@@ -273,24 +248,3 @@ class GPT(ABC):
 
         # No thinking detected
         return None, raw_text.strip()
-
-    def _download_nltk_data(self):
-        """
-        Downloads the nltk corpus ressources.
-        """
-        try:
-            find("tokenizers/punkt")
-        except LookupError:
-            nltk.download("punkt", quiet=True)
-
-        try:
-            find("corpora/stopwords")
-        except LookupError:
-            nltk.download("stopwords", quiet=True)
-
-        # try:
-        #     find("tokenizers/punkt_tab")
-        # except LookupError:
-        #     nltk.download("punkt_tab", quiet=True)
-
-        return None

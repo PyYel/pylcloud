@@ -32,7 +32,6 @@ database = [
 ]
 storage = ["boto3"]
 gpt = [
-    "nltk", 
     "requests",
 ]
 
