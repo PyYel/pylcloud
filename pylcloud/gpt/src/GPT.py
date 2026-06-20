@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os, sys
 from abc import ABC, abstractmethod
 from uuid import uuid4
