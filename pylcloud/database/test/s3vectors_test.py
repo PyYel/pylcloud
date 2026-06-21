@@ -18,7 +18,7 @@ load_dotenv(os.path.join(DATABASE_DIR_PATH, "src", "search", ".env"))
 api = DatabaseSearchS3Vector(
     bucket_name="vector-275376003127",
     AWS_ACCESS_KEY_ID=os.getenv("AWS_ACCESS_KEY_ID", ""),
-    AWS_ACCESS_KEY_SECRET=os.getenv("AWS_ACCESS_KEY_SECRET", ""),
+    AWS_SECRET_ACCESS_KEY=os.getenv("AWS_SECRET_ACCESS_KEY", ""),
     AWS_REGION_NAME=os.getenv("AWS_REGION_NAME", "eu-west-1"),
     
 )

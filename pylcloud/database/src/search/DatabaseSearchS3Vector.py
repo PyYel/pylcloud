@@ -21,14 +21,14 @@ class DatabaseSearchS3Vector(DatabaseSearch):
         bucket_name: str,
         AWS_REGION_NAME: str = os.getenv("AWS_REGION_NAME", "eu-west-1"),
         AWS_ACCESS_KEY_ID: Optional[str] = os.getenv("AWS_ACCESS_KEY_ID", None),
-        AWS_ACCESS_KEY_SECRET: Optional[str] = os.getenv("AWS_ACCESS_KEY_SECRET", None),
+        AWS_SECRET_ACCESS_KEY: Optional[str] = os.getenv("AWS_SECRET_ACCESS_KEY", None),
     ):
         super().__init__()
         self.logger = _config_logger(logs_name="DatabaseSearchS3Vector")
         
         self._creds = {
             "aws_access_key_id": AWS_ACCESS_KEY_ID,
-            "aws_secret_access_key": AWS_ACCESS_KEY_SECRET,
+            "aws_secret_access_key": AWS_SECRET_ACCESS_KEY,
             "region_name": AWS_REGION_NAME
         }
         self.s3_vectors: Optional[boto3.Session] = None

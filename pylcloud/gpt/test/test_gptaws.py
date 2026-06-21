@@ -14,7 +14,7 @@ from gpt import GPTAWS
 
 api = GPTAWS(
     AWS_ACCESS_KEY_ID=os.getenv("AWS_ACCESS_KEY_ID"),
-    AWS_ACCESS_KEY_SECRET=os.getenv("AWS_ACCESS_KEY_SECRET"),
+    AWS_SECRET_ACCESS_KEY=os.getenv("AWS_SECRET_ACCESS_KEY"),
     AWS_REGION_NAME=os.getenv("AWS_REGION_NAME", "eu-west-1"),
 )
 
@@ -148,17 +148,31 @@ def dummy_tool_handler(name: str, inputs: dict) -> str:
 
     return f"Unknown tool: {name}"
 
+messages = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "text": "who are you?"
+                }
+            ]
+        }
+    ]
+
+os.environ["LOG_LEVEL"] = "DEBUG"
 
 model_name = "nova-micro"
 result, details = api.return_agent(
     model_name=model_name,
-    user_prompt="What are the most efficient solar panels, and who wrote the document that mentions them?",
+    user_prompt="a",
     tools=TOOLS_SPEC,
     tool_handler=dummy_tool_handler,
     system_prompt="You are a helpful assistant with access to a knowledge base. Always search before answering.",
+    messages=messages
 )
 
 pprint.pprint(result)
+
 
 if result and details:
 

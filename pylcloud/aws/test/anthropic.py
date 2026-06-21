@@ -22,7 +22,7 @@ load_dotenv(
 
 api_bedrock = AWSBedrockModels(
     os.getenv("AWS_ACCESS_KEY_ID"),
-    os.getenv("AWS_ACCESS_KEY_SECRET"),
+    os.getenv("AWS_SECRET_ACCESS_KEY"),
     aws_region_name="eu-west-1",
 )
 

@@ -39,7 +39,7 @@ if "aws" in sys.argv:
     #                         connection_timeout=10,
     #                         aws_region_name=os.getenv("AWS_REGION_NAME"),
     #                         aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-    #                         aws_secret_access_key=os.getenv("AWS_ACCESS_KEY_SECRET"))
+    #                         aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"))
     # db.connect_database(schema_name="test-db", create_if_not_exists=True)
     # db.list_databases(display=True)
     # db._create_iam_user(user="RDSUser", schema_name="test-db")
@@ -54,7 +54,7 @@ if "aws" in sys.argv:
         connection_timeout=10,
         aws_region_name=os.getenv("AWS_REGION_NAME"),
         aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-        aws_secret_access_key=os.getenv("AWS_ACCESS_KEY_SECRET"),
+        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
     )
     db.list_tables(display=True)
     db.create_table(

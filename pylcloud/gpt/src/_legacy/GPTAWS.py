@@ -41,7 +41,7 @@ class GPTAWS(GPT):
         self.bedrock_client = boto3.client(
             service_name="bedrock",
             aws_access_key_id=kwargs.get("AWS_ACCESS_KEY_ID"),
-            aws_secret_access_key=kwargs.get("AWS_ACCESS_KEY_SECRET"),
+            aws_secret_access_key=kwargs.get("AWS_SECRET_ACCESS_KEY"),
             region_name=self.AWS_REGION_NAME,
         )
         # aws_session_token=aws_session_token)
@@ -49,7 +49,7 @@ class GPTAWS(GPT):
         self.bedrock_runtime_client = boto3.client(
             service_name="bedrock-runtime",
             aws_access_key_id=kwargs.get("AWS_ACCESS_KEY_ID"),
-            aws_secret_access_key=kwargs.get("AWS_ACCESS_KEY_SECRET"),
+            aws_secret_access_key=kwargs.get("AWS_SECRET_ACCESS_KEY"),
             region_name=kwargs.get("AWS_REGION_NAME"),
         )
         # aws_session_token=aws_session_token)

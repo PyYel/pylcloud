@@ -24,7 +24,7 @@ class GPTAWS(GPT):
         self,
         AWS_REGION_NAME: str = os.getenv("AWS_REGION_NAME", "eu-west-1"),
         AWS_ACCESS_KEY_ID: Optional[str] = os.getenv("AWS_ACCESS_KEY_ID", None),
-        AWS_ACCESS_KEY_SECRET: Optional[str] = os.getenv("AWS_ACCESS_KEY_SECRET", None),
+        AWS_SECRET_ACCESS_KEY: Optional[str] = os.getenv("AWS_SECRET_ACCESS_KEY", None),
         **kwargs,
     ):
         """
@@ -64,14 +64,14 @@ class GPTAWS(GPT):
         self.bedrock_client = boto3.client(
             service_name="bedrock",
             aws_access_key_id=AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=AWS_ACCESS_KEY_SECRET,
+            aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
             region_name=AWS_REGION_NAME,
         )
 
         self.bedrock_runtime_client = boto3.client(
             service_name="bedrock-runtime",
             aws_access_key_id=AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=AWS_ACCESS_KEY_SECRET,
+            aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
             region_name=AWS_REGION_NAME,
         )
 
